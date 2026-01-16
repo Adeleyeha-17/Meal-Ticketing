@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Check, X, Clock, Users, Calendar, QrCode } from 'lucide-react';
+import { Check, X, Clock, Users, Calendar, QrCode, AlertCircle } from 'lucide-react';
 
 interface SessionData {
   id: string;
@@ -18,6 +18,7 @@ interface MealUsedInfo {
   staffId: string;
   usedDate: string;
   usedTime: string;
+  price: number;
 }
 
 declare global {
@@ -81,168 +82,126 @@ const MealTicketSystem = () => {
     loadJsQR();
   }, []);
 
-  const checkMealStatus = useCallback(async (staffId: string) => {
-    const today = new Date().toISOString().split('T')[0];
-    
-    try {
-      const response = await fetch(`${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=checkMeal&staffId=${staffId}&date=${today}`);
-      const data = await response.json();
-      setMealUsedToday(data.used);
-    } catch (err) {
-      console.error('Error checking meal status:', err);
-    }
-  }, []);
-
+  // OPTIMIZED: Single check on mount
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
-
     const storedSession = localStorage.getItem('mealTicketSession');
+    
     if (storedSession) {
       const sessionData = JSON.parse(storedSession);
       
-      fetch(`${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=checkMeal&staffId=${sessionData.id}&date=${today}`)
-        .then(res => res.json())
-        .then(mealData => {
+      // Single batched verification call
+      Promise.all([
+        fetch(`${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=checkMeal&staffId=${sessionData.id}&date=${today}`),
+        fetch(`${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=verifySession&staffId=${sessionData.id}&sessionId=${sessionData.sessionId}`)
+      ])
+        .then(async ([mealRes, sessionRes]) => {
+          const mealData = await mealRes.json();
+          const sessionValid = await sessionRes.json();
+          
           if (mealData.used) {
             setMealUsedInfo({
               name: sessionData.name,
               department: sessionData.department,
               staffId: sessionData.id,
               usedDate: mealData.date || today,
-              usedTime: mealData.time || 'Earlier today'
+              usedTime: mealData.time || 'Earlier today',
+              price: mealData.price || 0
             });
             localStorage.removeItem('mealTicketSession');
             setCurrentPage('alreadyUsed');
             return;
           }
           
-          if (sessionData.sessionId) {
-            fetch(`${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=verifySession&staffId=${sessionData.id}&sessionId=${sessionData.sessionId}`)
-              .then(res => res.json())
-              .then(data => {
-                if (data.valid) {
-                  setSession(sessionData);
-                  checkMealStatus(sessionData.id);
-                  setCurrentPage('dashboard');
-                } else {
-                  localStorage.removeItem('mealTicketSession');
-                  setError('Your session has expired or you logged in on another device.');
-                }
-              })
-              .catch(err => {
-                console.error('Session verification failed:', err);
-                localStorage.removeItem('mealTicketSession');
-              });
+          if (sessionValid.valid) {
+            setSession(sessionData);
+            setMealUsedToday(false);
+            setCurrentPage('dashboard');
           } else {
             localStorage.removeItem('mealTicketSession');
+            setError('Your session has expired or you logged in on another device.');
           }
         })
-        .catch(err => {
-          console.error('Failed to check meal status:', err);
+        .catch(() => {
           localStorage.removeItem('mealTicketSession');
         });
     }
-  }, [checkMealStatus]);
+  }, []);
 
+  // OPTIMIZED: Single batch login call
   const handleLogin = async (e: any) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
-    const startTime = Date.now();
-    const minLoadTime = 3000;
-
     try {
       const today = new Date().toISOString().split('T')[0];
+      const upperStaffId = staffId.toUpperCase().trim();
+      const upperSurname = surname.toUpperCase().trim();
       
-      const [mealCheckResponse, validationResponse] = await Promise.all([
-        fetch(`${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=checkMeal&staffId=${staffId}&date=${today}`),
-        fetch(`${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=validateStaff&staffId=${staffId}&surname=${surname}`)
-      ]);
+      // SINGLE API CALL for all validation
+      const response = await fetch(
+        `${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=batchLogin&staffId=${encodeURIComponent(upperStaffId)}&surname=${encodeURIComponent(upperSurname)}&date=${today}`
+      );
       
-      const mealCheck = await mealCheckResponse.json();
-      const data = await validationResponse.json();
+      const data = await response.json();
       
-      if (mealCheck.used) {
-        setMealUsedInfo({
-          name: mealCheck.name,
-          department: mealCheck.department,
-          staffId: staffId,
-          usedDate: mealCheck.date,
-          usedTime: mealCheck.time
-        });
-        
-        const elapsed = Date.now() - startTime;
-        if (elapsed < minLoadTime) {
-          await new Promise(resolve => setTimeout(resolve, minLoadTime - elapsed));
+      if (!data.success) {
+        if (data.errorType === 'ALREADY_USED') {
+          setMealUsedInfo({
+            name: data.mealInfo.name,
+            department: data.mealInfo.department,
+            staffId: upperStaffId,
+            usedDate: data.mealInfo.date,
+            usedTime: data.mealInfo.time,
+            price: data.mealInfo.price || 0
+          });
+          setLoading(false);
+          setCurrentPage('alreadyUsed');
+          return;
         }
         
-        setLoading(false);
-        setCurrentPage('alreadyUsed');
-        return;
-      }
-
-      if (!data.valid) {
-        const elapsed = Date.now() - startTime;
-        if (elapsed < minLoadTime) {
-          await new Promise(resolve => setTimeout(resolve, minLoadTime - elapsed));
+        if (data.errorType === 'ACTIVE_SESSION') {
+          setError('You are already logged in on another device. Please logout from that device first.');
+        } else if (data.errorType === 'TIME_EXPIRED') {
+          setError(data.error);
+        } else {
+          setError(data.error || 'Invalid Staff ID or Surname');
         }
         
-        setError('Invalid Staff ID or Surname. Please check your credentials.');
-        setLoading(false);
-        return;
-      }
-      
-      const checkSessionResponse = await fetch(`${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=checkActiveSession&staffId=${staffId}`);
-      const sessionCheck = await checkSessionResponse.json();
-      
-      if (sessionCheck.hasActiveSession) {
-        const elapsed = Date.now() - startTime;
-        if (elapsed < minLoadTime) {
-          await new Promise(resolve => setTimeout(resolve, minLoadTime - elapsed));
-        }
-        
-        setError('You are already logged in on another device. Please logout from that device first.');
         setLoading(false);
         return;
       }
 
-      const sessionId = `${staffId}_${Date.now()}`;
+      // Register session
+      const sessionId = `${upperStaffId}_${Date.now()}`;
       const sessionData = {
-        id: staffId,
-        name: data.name,
-        department: data.department,
-        price: data.price || 0,
+        id: upperStaffId,
+        name: data.staff.name,
+        department: data.staff.department,
+        price: data.staff.price || 0,
         loginTime: new Date().toISOString(),
         sessionId: sessionId
       };
       
-      await fetch(`${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=registerSession&staffId=${staffId}&sessionId=${sessionId}&loginTime=${sessionData.loginTime}`);
+      await fetch(
+        `${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=registerSession&staffId=${upperStaffId}&sessionId=${sessionId}&loginTime=${sessionData.loginTime}`
+      );
       
       setSession(sessionData);
       localStorage.setItem('mealTicketSession', JSON.stringify(sessionData));
-      await checkMealStatus(staffId);
-      
-      const elapsed = Date.now() - startTime;
-      if (elapsed < minLoadTime) {
-        await new Promise(resolve => setTimeout(resolve, minLoadTime - elapsed));
-      }
-      
+      setMealUsedToday(false);
       setCurrentPage('dashboard');
+      
     } catch (err) {
       console.error('Login error:', err);
-      
-      const elapsed = Date.now() - startTime;
-      if (elapsed < minLoadTime) {
-        await new Promise(resolve => setTimeout(resolve, minLoadTime - elapsed));
-      }
-      
       setError('Connection failed. Please check your internet connection.');
     }
     
     setLoading(false);
   };
 
+  // OPTIMIZED: Direct meal verification
   const verifyMeal = useCallback(async () => {
     if (!session) {
       setCurrentPage('login');
@@ -255,37 +214,19 @@ const MealTicketSystem = () => {
     }
 
     setLoading(true);
-    const startTime = Date.now();
-    const minLoadTime = 3000;
 
     try {
-      const timestamp = new Date().toLocaleTimeString();
+      const timestamp = new Date().toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: true 
+      });
       const today = new Date().toISOString().split('T')[0];
-      
-      const checkResponse = await fetch(`${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=checkMeal&staffId=${session.id}&date=${today}`);
-      const checkData = await checkResponse.json();
-      
-      if (checkData.used) {
-        const elapsed = Date.now() - startTime;
-        if (elapsed < minLoadTime) {
-          await new Promise(resolve => setTimeout(resolve, minLoadTime - elapsed));
-        }
-        
-        setError('You have already used your meal ticket today');
-        setMealUsedToday(true);
-        setLoading(false);
-        return;
-      }
       
       const url = `${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=logMeal&staffId=${encodeURIComponent(session.id)}&name=${encodeURIComponent(session.name)}&department=${encodeURIComponent(session.department)}&price=${encodeURIComponent(session.price || 0)}&date=${encodeURIComponent(today)}&time=${encodeURIComponent(timestamp)}`;
       
       const response = await fetch(url);
       const result = await response.json();
-      
-      const elapsed = Date.now() - startTime;
-      if (elapsed < minLoadTime) {
-        await new Promise(resolve => setTimeout(resolve, minLoadTime - elapsed));
-      }
       
       if (result.success) {
         setMealUsedToday(true);
@@ -295,13 +236,7 @@ const MealTicketSystem = () => {
       }
     } catch (err) {
       console.error('Meal logging error:', err);
-      
-      const elapsed = Date.now() - startTime;
-      if (elapsed < minLoadTime) {
-        await new Promise(resolve => setTimeout(resolve, minLoadTime - elapsed));
-      }
-      
-      setError('Failed to connect to Google Sheets. Please try again.');
+      setError('Failed to connect. Please try again.');
     }
     
     setLoading(false);
@@ -418,8 +353,6 @@ const MealTicketSystem = () => {
 
   const handleLogout = async () => {
     setLoading(true);
-    const startTime = Date.now();
-    const minLoadTime = 2000;
     
     if (session?.sessionId && !mealUsedToday) {
       try {
@@ -439,11 +372,6 @@ const MealTicketSystem = () => {
     
     stopQRScanner();
     
-    const elapsed = Date.now() - startTime;
-    if (elapsed < minLoadTime) {
-      await new Promise(resolve => setTimeout(resolve, minLoadTime - elapsed));
-    }
-    
     setLoading(false);
     setCurrentPage('login');
   };
@@ -459,9 +387,10 @@ const MealTicketSystem = () => {
     };
   }, [cameraStream]);
 
+  // LOGIN PAGE
   if (currentPage === 'login') {
     return (
-      <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
           <div className="text-center mb-8">
             <div className="bg-indigo-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -469,56 +398,65 @@ const MealTicketSystem = () => {
             </div>
             <h1 className="text-3xl font-bold text-gray-800 mb-2">Meal Ticket System</h1>
             <p className="text-gray-600">Login to access your meal ticket</p>
+            <div className="mt-3 text-xs text-gray-500 bg-blue-50 px-3 py-2 rounded-lg">
+              <Clock className="inline-block mr-1" size={12} />
+              Available: Mon-Fri, 7AM - 5PM
+            </div>
           </div>
 
-          <div className="space-y-6">
+          <form onSubmit={handleLogin} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Staff ID</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Staff ID <span className="text-red-500">*</span>
+              </label>
               <input
                 type="text"
                 value={staffId}
-                onChange={(e) => setStaffId(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleLogin(e)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                placeholder="Enter your Staff ID"
+                onChange={(e) => setStaffId(e.target.value.toUpperCase())}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none uppercase"
+                placeholder="ENTER STAFF ID"
+                required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Surname</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Surname <span className="text-red-500">*</span>
+              </label>
               <input
                 type="text"
                 value={surname}
-                onChange={(e) => setSurname(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleLogin(e)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                placeholder="Enter your Surname"
+                onChange={(e) => setSurname(e.target.value.toUpperCase())}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none uppercase"
+                placeholder="ENTER SURNAME"
+                required
               />
             </div>
 
             {error && (
-              <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg flex items-center gap-2">
-                <X size={20} />
+              <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg flex items-start gap-2">
+                <AlertCircle size={20} className="flex-shrink-0 mt-0.5" />
                 <span className="text-sm">{error}</span>
               </div>
             )}
 
             <button
-              onClick={handleLogin}
+              type="submit"
               disabled={loading}
-              className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50"
+              className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Logging in...' : 'Login'}
+              {loading ? 'Authenticating...' : 'Login'}
             </button>
-          </div>
+          </form>
         </div>
       </div>
     );
   }
 
+  // DASHBOARD PAGE
   if (currentPage === 'dashboard') {
     return (
-      <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 p-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
         <div className="max-w-4xl mx-auto">
           <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
             <div className="bg-indigo-600 text-white p-6">
@@ -558,8 +496,8 @@ const MealTicketSystem = () => {
                   ₦
                 </div>
                 <div>
-                  <p className="text-sm text-indigo-600 font-medium">Your Meal Ticket Price</p>
-                  <p className="font-bold text-2xl text-indigo-900">₦{session?.price || 0}</p>
+                  <p className="text-sm text-indigo-600 font-medium">Your Meal Price</p>
+                  <p className="font-bold text-2xl text-indigo-900">₦{session?.price?.toLocaleString() || 0}</p>
                 </div>
               </div>
 
@@ -587,11 +525,11 @@ const MealTicketSystem = () => {
                     {!showQRScanner ? (
                       <button
                         onClick={startQRScanner}
-                        disabled={!jsQRLoaded}
+                        disabled={!jsQRLoaded || loading}
                         className="w-full bg-green-600 text-white py-4 rounded-lg font-semibold hover:bg-green-700 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <QrCode size={24} />
-                        {jsQRLoaded ? 'Open Camera to Scan QR Code' : 'Loading Scanner...'}
+                        {loading ? 'Processing...' : jsQRLoaded ? 'Open Camera to Scan QR Code' : 'Loading Scanner...'}
                       </button>
                     ) : (
                       <div className="bg-black rounded-lg overflow-hidden">
@@ -645,8 +583,8 @@ const MealTicketSystem = () => {
                 )}
 
                 {error && (
-                  <div className="mt-4 bg-red-50 text-red-600 px-4 py-3 rounded-lg flex items-center gap-2">
-                    <X size={20} />
+                  <div className="mt-4 bg-red-50 text-red-600 px-4 py-3 rounded-lg flex items-start gap-2">
+                    <AlertCircle size={20} className="flex-shrink-0 mt-0.5" />
                     <span className="text-sm">{error}</span>
                   </div>
                 )}
@@ -658,9 +596,10 @@ const MealTicketSystem = () => {
     );
   }
 
+  // SUCCESS PAGE
   if (currentPage === 'success') {
     return (
-      <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
           <div className="text-center">
             <div className="bg-green-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -672,12 +611,13 @@ const MealTicketSystem = () => {
             <p className="text-sm text-gray-500 mb-2">Time: {new Date().toLocaleTimeString()}</p>
             <div className="bg-indigo-100 border-2 border-indigo-300 rounded-lg p-3 mb-6">
               <p className="text-indigo-700 text-sm font-medium mb-1">Ticket Price</p>
-              <p className="text-indigo-900 text-3xl font-bold">₦{session?.price || 0}</p>
+              <p className="text-indigo-900 text-3xl font-bold">₦{session?.price?.toLocaleString() || 0}</p>
             </div>
             
             <div className="bg-green-50 border-l-4 border-green-500 p-4 mb-6">
-              <p className="text-sm text-green-700 font-semibold">✓ Logged to Google Sheets</p>
-              <p className="text-xs text-green-600 mt-1">Session locked until tomorrow at 7 AM</p>
+              <p className="text-sm text-green-700 font-semibold">✓ STATUS: USED</p>
+              <p className="text-xs text-green-600 mt-1">Logged to Google Sheets successfully</p>
+              <p className="text-xs text-green-600">Session locked until tomorrow at 7 AM</p>
             </div>
             
             <button
@@ -693,9 +633,10 @@ const MealTicketSystem = () => {
     );
   }
 
+  // ALREADY USED PAGE
   if (currentPage === 'alreadyUsed') {
     return (
-      <div className="min-h-screen bg-linear-to-br from-red-50 to-orange-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-100 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
           <div className="text-center">
             <div className="bg-red-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -711,8 +652,10 @@ const MealTicketSystem = () => {
               <div className="text-xs text-red-600 space-y-1">
                 <p>• Staff ID: {mealUsedInfo?.staffId}</p>
                 <p>• Department: {mealUsedInfo?.department}</p>
+                <p>• Price: ₦{mealUsedInfo?.price?.toLocaleString() || 0}</p>
                 <p>• Used on: {mealUsedInfo?.usedDate}</p>
                 <p>• Time: {mealUsedInfo?.usedTime}</p>
+                <p className="font-bold text-red-700 mt-2">• STATUS: USED</p>
               </div>
             </div>
 
@@ -724,7 +667,7 @@ const MealTicketSystem = () => {
                 Tomorrow at 7:00 AM
               </p>
               <p className="text-xs text-blue-700 mt-2">
-                Monday - Friday only
+                Monday - Friday only • Expires daily at 5:00 PM
               </p>
             </div>
             
