@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Check, X, Clock, Users, Calendar, QrCode, Download } from 'lucide-react';
+import { Check, X, Clock, Users, Calendar, QrCode } from 'lucide-react';
 
 // Types
 interface SessionData {
@@ -457,28 +457,7 @@ const MealTicketSystem = () => {
     setLoading(false);
     setCurrentPage('login');
   };
-
-  const downloadQRCodeInfo = () => {
-    const qrInfo = `MEAL TICKET SYSTEM - QR CODE SETUP
-=====================================
-
-QR Code Value: ${CAFETERIA_QR_CODE}
-
-INSTRUCTIONS:
-1. Go to https://www.qr-code-generator.com/
-2. Select "Text" type
-3. Enter the code: ${CAFETERIA_QR_CODE}
-4. Generate and download the QR code
-5. Print it in A4 size
-6. Post it at the cafeteria entrance`;
-    
-    const blob = new Blob([qrInfo], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'QR_Code_Instructions.txt';
-    a.click();
-  };
+  
 
   // Cleanup on unmount
   useEffect(() => {
@@ -538,13 +517,6 @@ INSTRUCTIONS:
             >
               {loading ? 'Logging in...' : 'Login'}
             </button>
-          </div>
-
-          <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
-            <p className="text-xs text-green-700 flex items-center gap-1">
-              <Check size={14} />
-              <strong>Google Sheets Connected!</strong>
-            </p>
           </div>
         </div>
       </div>
@@ -685,22 +657,6 @@ INSTRUCTIONS:
                     <span className="text-sm">{error}</span>
                   </div>
                 )}
-              </div>
-
-              <div className="bg-purple-50 rounded-xl p-4 border border-purple-200">
-                <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                  <Download size={18} />
-                  Admin: Generate Physical QR Code
-                </h4>
-                <p className="text-sm text-gray-700 mb-3">
-                  Download instructions to create the cafeteria QR code.
-                </p>
-                <button
-                  onClick={downloadQRCodeInfo}
-                  className="w-full bg-purple-600 text-white py-2 rounded-lg font-semibold hover:bg-purple-700 transition text-sm"
-                >
-                  Download QR Setup Instructions
-                </button>
               </div>
             </div>
           </div>
