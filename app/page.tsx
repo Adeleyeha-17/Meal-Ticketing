@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Check, X, Clock, Users, Calendar, QrCode, Download } from 'lucide-react';
 
 // Types
@@ -12,6 +12,7 @@ interface SessionData {
   loginTime: string;
   sessionId: string;
 }
+
 interface MealUsedInfo {
   name: string;
   department: string;
@@ -19,6 +20,7 @@ interface MealUsedInfo {
   usedDate: string;
   usedTime: string;
 }
+
 declare global {
   interface Window {
     jsQR?: {
@@ -34,6 +36,7 @@ const GOOGLE_SHEETS_CONFIG = {
   SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbz3W4uY_rORZRrxar31BV7l3G14F8egzggutmvLyL70sMBLAlKOnteXysdD6oD4Tgsu6A/exec',
   ENABLED: true
 } as const;
+
 const MealTicketSystem = () => {
   const [currentPage, setCurrentPage] = useState<string>('login');
   const [session, setSession] = useState<SessionData | null>(null);
@@ -41,20 +44,19 @@ const MealTicketSystem = () => {
   const [surname, setSurname] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [mealUsedToday, setMealUsedToday] = useState<boolean>(false);
-  const [todayDate, setTodayDate] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
-  const [qrInput, setQrInput] = useState<string>('');
   const [showQRScanner, setShowQRScanner] = useState<boolean>(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [mealUsedInfo, setMealUsedInfo] = useState<MealUsedInfo | null>(null);
+  const [jsQRLoaded, setJsQRLoaded] = useState<boolean>(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [jsQRLoaded, setJsQRLoaded] = useState<boolean>(false);
+  const detectIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Load jsQR library
   useEffect(() => {
-    // Load jsQR library - try multiple CDN sources for reliability
-    const loadJsQR = async () => {
+    const loadJsQR = async (): Promise<void> => {
       const cdnUrls = [
         'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js',
         'https://unpkg.com/jsqr@1.4.0/dist/jsQR.min.js'
@@ -65,7 +67,7 @@ const MealTicketSystem = () => {
           const script = document.createElement('script');
           script.src = url;
           
-          const loadPromise = new Promise((resolve, reject) => {
+          const loadPromise = new Promise<void>((resolve, reject) => {
             script.onload = () => {
               setJsQRLoaded(true);
               resolve();
@@ -75,7 +77,7 @@ const MealTicketSystem = () => {
 
           document.body.appendChild(script);
           await loadPromise;
-          return; // Success, exit the function
+          return;
         } catch (err) {
           continue;
         }
@@ -85,9 +87,21 @@ const MealTicketSystem = () => {
     loadJsQR();
   }, []);
 
+  const checkMealStatus = useCallback(async (staffId: string): Promise<void> => {
+    const today = new Date().toISOString().split('T')[0];
+    
+    try {
+      const response = await fetch(`${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=checkMeal&staffId=${staffId}&date=${today}`);
+      const data = await response.json();
+      setMealUsedToday(data.used);
+    } catch (err) {
+      console.error('Error checking meal status:', err);
+    }
+  }, []);
+
+  // Check stored session
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
-    setTodayDate(today);
 
     const storedSession = localStorage.getItem('mealTicketSession');
     if (storedSession) {
@@ -135,33 +149,19 @@ const MealTicketSystem = () => {
           localStorage.removeItem('mealTicketSession');
         });
     }
-  }, []);
+  }, [checkMealStatus]);
 
-  const checkMealStatus = async (staffId: string): Promise<void> => {
-    const today = new Date().toISOString().split('T')[0];
-    
-    try {
-      const response = await fetch(`${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=checkMeal&staffId=${staffId}&date=${today}`);
-      const data = await response.json();
-      setMealUsedToday(data.used);
-    } catch (err) {
-      console.error('Error checking meal status:', err);
-    }
-  };
-
-  const handleLogin = async (e) => {
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement> | React.MouseEvent<HTMLButtonElement> | React.KeyboardEvent<HTMLInputElement>) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
-    // Show loading for minimum 3 seconds for better UX
     const startTime = Date.now();
     const minLoadTime = 3000;
 
     try {
       const today = new Date().toISOString().split('T')[0];
       
-      // Run all checks in parallel for faster loading
       const [mealCheckResponse, validationResponse] = await Promise.all([
         fetch(`${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=checkMeal&staffId=${staffId}&date=${today}`),
         fetch(`${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=validateStaff&staffId=${staffId}&surname=${surname}`)
@@ -179,7 +179,6 @@ const MealTicketSystem = () => {
           usedTime: mealCheck.time
         });
         
-        // Ensure minimum load time
         const elapsed = Date.now() - startTime;
         if (elapsed < minLoadTime) {
           await new Promise(resolve => setTimeout(resolve, minLoadTime - elapsed));
@@ -191,7 +190,6 @@ const MealTicketSystem = () => {
       }
 
       if (!data.valid) {
-        // Ensure minimum load time
         const elapsed = Date.now() - startTime;
         if (elapsed < minLoadTime) {
           await new Promise(resolve => setTimeout(resolve, minLoadTime - elapsed));
@@ -206,7 +204,6 @@ const MealTicketSystem = () => {
       const sessionCheck = await checkSessionResponse.json();
       
       if (sessionCheck.hasActiveSession) {
-        // Ensure minimum load time
         const elapsed = Date.now() - startTime;
         if (elapsed < minLoadTime) {
           await new Promise(resolve => setTimeout(resolve, minLoadTime - elapsed));
@@ -233,7 +230,6 @@ const MealTicketSystem = () => {
       localStorage.setItem('mealTicketSession', JSON.stringify(sessionData));
       await checkMealStatus(staffId);
       
-      // Ensure minimum load time
       const elapsed = Date.now() - startTime;
       if (elapsed < minLoadTime) {
         await new Promise(resolve => setTimeout(resolve, minLoadTime - elapsed));
@@ -243,7 +239,6 @@ const MealTicketSystem = () => {
     } catch (err) {
       console.error('Login error:', err);
       
-      // Ensure minimum load time even on error
       const elapsed = Date.now() - startTime;
       if (elapsed < minLoadTime) {
         await new Promise(resolve => setTimeout(resolve, minLoadTime - elapsed));
@@ -255,118 +250,7 @@ const MealTicketSystem = () => {
     setLoading(false);
   };
 
-  const startQRScanner = async () => {
-    if (!jsQRLoaded) {
-      setError('QR scanner is still loading. Please wait a moment and try again.');
-      return;
-    }
-    
-    try {
-      setError('');
-      setShowQRScanner(true);
-      
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        } 
-      });
-      
-      setCameraStream(stream);
-      
-      setTimeout(() => {
-        const video = videoRef.current;
-        if (video && stream) {
-          video.srcObject = stream;
-          video.play()
-            .then(() => {
-              setTimeout(startQRDetection, 500);
-            })
-            .catch(err => {
-              setError('Failed to start video');
-            });
-        }
-      }, 300);
-      
-    } catch (err) {
-      setError('Camera access denied. Please enable camera permissions.');
-      setShowQRScanner(false);
-    }
-  };
-
-  const startQRDetection = () => {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    
-    if (!video || !canvas) {
-      return;
-    }
-    
-    const context = canvas.getContext('2d');
-    
-    const detectInterval = setInterval(() => {
-      if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        
-        if (canvas.width > 0 && canvas.height > 0) {
-          context.drawImage(video, 0, 0, canvas.width, canvas.height);
-          const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-          
-          try {
-            if (typeof window !== 'undefined' && window.jsQR) {
-              const code = window.jsQR(imageData.data, imageData.width, imageData.height, {
-                inversionAttempts: "dontInvert",
-              });
-              
-              if (code && code.data) {
-                clearInterval(detectInterval);
-                stopQRScanner();
-                
-                const detectedCode = code.data.trim();
-                const expectedCode = CAFETERIA_QR_CODE.trim();
-                
-                if (detectedCode === expectedCode) {
-                  verifyMeal();
-                } else {
-                  setError('Invalid QR Code. Please scan the correct cafeteria QR code.');
-                  setTimeout(() => setError(''), 5000);
-                }
-              }
-            }
-          } catch (err) {
-            // Silently handle detection errors
-
-          }
-        }
-      }
-    }, 250);
-  };
-
-  const stopQRScanner = () => {
-    if (cameraStream) {
-      cameraStream.getTracks().forEach(track => track.stop());
-      setCameraStream(null);
-    }
-    
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    
-    setShowQRScanner(false);
-  };
-
-  const handleQRScan = () => {
-    if (qrInput.trim() === CAFETERIA_QR_CODE) {
-      setQrInput('');
-      verifyMeal();
-    } else {
-      setError('Invalid QR Code. Please enter the correct code.');
-      setTimeout(() => setError(''), 3000);
-    }
-  };
-
-  const verifyMeal = async () => {
+  const verifyMeal = useCallback(async () => {
     if (!session) {
       setCurrentPage('login');
       return;
@@ -428,6 +312,118 @@ const MealTicketSystem = () => {
     }
     
     setLoading(false);
+  }, [session, mealUsedToday]);
+
+  const stopQRScanner = useCallback(() => {
+    if (detectIntervalRef.current) {
+      clearInterval(detectIntervalRef.current);
+      detectIntervalRef.current = null;
+    }
+
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+    
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    
+    setShowQRScanner(false);
+  }, [cameraStream]);
+
+  const startQRDetection = useCallback((): void => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    
+    if (!video || !canvas) {
+      return;
+    }
+    
+    const context = canvas.getContext('2d');
+    
+    if (!context) {
+      return;
+    }
+    
+    detectIntervalRef.current = setInterval(() => {
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        if (canvas.width > 0 && canvas.height > 0) {
+          context.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+          
+          try {
+            if (typeof window !== 'undefined' && window.jsQR) {
+              const code = window.jsQR(imageData.data, imageData.width, imageData.height, {
+                inversionAttempts: "dontInvert",
+              });
+              
+              if (code && code.data) {
+                if (detectIntervalRef.current) {
+                  clearInterval(detectIntervalRef.current);
+                  detectIntervalRef.current = null;
+                }
+                stopQRScanner();
+                
+                const detectedCode = code.data.trim();
+                const expectedCode = CAFETERIA_QR_CODE.trim();
+                
+                if (detectedCode === expectedCode) {
+                  verifyMeal();
+                } else {
+                  setError('Invalid QR Code. Please scan the correct cafeteria QR code.');
+                  setTimeout(() => setError(''), 5000);
+                }
+              }
+            }
+          } catch (err) {
+            // Silently handle detection errors
+          }
+        }
+      }
+    }, 250);
+  }, [stopQRScanner, verifyMeal]);
+
+  const startQRScanner = async () => {
+    if (!jsQRLoaded) {
+      setError('QR scanner is still loading. Please wait a moment and try again.');
+      return;
+    }
+    
+    try {
+      setError('');
+      setShowQRScanner(true);
+      
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        } 
+      });
+      
+      setCameraStream(stream);
+      
+      setTimeout(() => {
+        const video = videoRef.current;
+        if (video && stream) {
+          video.srcObject = stream;
+          video.play()
+            .then(() => {
+              setTimeout(startQRDetection, 500);
+            })
+            .catch(() => {
+              setError('Failed to start video');
+            });
+        }
+      }, 300);
+      
+    } catch (err) {
+      setError('Camera access denied. Please enable camera permissions.');
+      setShowQRScanner(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -449,18 +445,9 @@ const MealTicketSystem = () => {
     setStaffId('');
     setSurname('');
     setError('');
-    setQrInput('');
     setMealUsedInfo(null);
     
-    if (cameraStream) {
-      cameraStream.getTracks().forEach(track => track.stop());
-      setCameraStream(null);
-    }
-    setShowQRScanner(false);
-    
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
+    stopQRScanner();
     
     const elapsed = Date.now() - startTime;
     if (elapsed < minLoadTime) {
@@ -493,6 +480,13 @@ INSTRUCTIONS:
     a.click();
   };
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopQRScanner();
+    };
+  }, [stopQRScanner]);
+
   if (currentPage === 'login') {
     return (
       <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -513,7 +507,7 @@ INSTRUCTIONS:
                 value={staffId}
                 onChange={(e) => setStaffId(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleLogin(e)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                 placeholder="Enter your Staff ID"
               />
             </div>
@@ -525,7 +519,7 @@ INSTRUCTIONS:
                 value={surname}
                 onChange={(e) => setSurname(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleLogin(e)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                 placeholder="Enter your Surname"
               />
             </div>
@@ -626,16 +620,14 @@ INSTRUCTIONS:
                 {!mealUsedToday && (
                   <div className="mt-6 space-y-4">
                     {!showQRScanner ? (
-                      <>
-                        <button
-                          onClick={startQRScanner}
-                          disabled={!jsQRLoaded}
-                          className="w-full bg-green-600 text-white py-4 rounded-lg font-semibold hover:bg-green-700 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <QrCode size={24} />
-                          {jsQRLoaded ? 'Open Camera to Scan QR Code' : 'Loading Scanner...'}
-                        </button>
-                      </>
+                      <button
+                        onClick={startQRScanner}
+                        disabled={!jsQRLoaded}
+                        className="w-full bg-green-600 text-white py-4 rounded-lg font-semibold hover:bg-green-700 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <QrCode size={24} />
+                        {jsQRLoaded ? 'Open Camera to Scan QR Code' : 'Loading Scanner...'}
+                      </button>
                     ) : (
                       <div className="bg-black rounded-lg overflow-hidden">
                         <div className="relative bg-black" style={{ minHeight: '350px' }}>
@@ -811,6 +803,8 @@ INSTRUCTIONS:
       </div>
     );
   }
+
+  return null;
 };
 
 export default MealTicketSystem;
