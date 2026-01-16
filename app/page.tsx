@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Check, X, Clock, Users, Calendar, QrCode } from 'lucide-react';
 
-// Types
 interface SessionData {
   id: string;
   name: string;
@@ -23,11 +22,7 @@ interface MealUsedInfo {
 
 declare global {
   interface Window {
-    jsQR?: {
-      (imageData: Uint8ClampedArray, width: number, height: number, options?: { inversionAttempts: string }): {
-        data: string;
-      } | null;
-    };
+    jsQR?: any;
   }
 }
 
@@ -52,11 +47,10 @@ const MealTicketSystem = () => {
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const detectIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const detectIntervalRef = useRef<any>(null);
 
-  // Load jsQR library
   useEffect(() => {
-    const loadJsQR = async (): Promise<void> => {
+    const loadJsQR = async () => {
       const cdnUrls = [
         'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js',
         'https://unpkg.com/jsqr@1.4.0/dist/jsQR.min.js'
@@ -87,7 +81,7 @@ const MealTicketSystem = () => {
     loadJsQR();
   }, []);
 
-  const checkMealStatus = useCallback(async (staffId: string): Promise<void> => {
+  const checkMealStatus = useCallback(async (staffId: string) => {
     const today = new Date().toISOString().split('T')[0];
     
     try {
@@ -99,7 +93,6 @@ const MealTicketSystem = () => {
     }
   }, []);
 
-  // Check stored session
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
 
@@ -151,7 +144,7 @@ const MealTicketSystem = () => {
     }
   }, [checkMealStatus]);
 
-  const handleLogin = async (e: React.FormEvent<HTMLFormElement> | React.MouseEvent<HTMLButtonElement> | React.KeyboardEvent<HTMLInputElement>) => {
+  const handleLogin = async (e: any) => {
     e.preventDefault();
     setError('');
     setLoading(true);
@@ -322,8 +315,9 @@ const MealTicketSystem = () => {
 
     if (cameraStream) {
       cameraStream.getTracks().forEach(track => track.stop());
-      setCameraStream(null);
     }
+    
+    setCameraStream(null);
     
     if (videoRef.current) {
       videoRef.current.srcObject = null;
@@ -332,19 +326,14 @@ const MealTicketSystem = () => {
     setShowQRScanner(false);
   }, [cameraStream]);
 
-  const startQRDetection = useCallback((): void => {
+  const startQRDetection = useCallback(() => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     
-    if (!video || !canvas) {
-      return;
-    }
+    if (!video || !canvas) return;
     
     const context = canvas.getContext('2d');
-    
-    if (!context) {
-      return;
-    }
+    if (!context) return;
     
     detectIntervalRef.current = setInterval(() => {
       if (video.readyState === video.HAVE_ENOUGH_DATA) {
@@ -380,7 +369,7 @@ const MealTicketSystem = () => {
               }
             }
           } catch (err) {
-            // Silently handle detection errors
+            // Silent
           }
         }
       }
@@ -395,20 +384,21 @@ const MealTicketSystem = () => {
     
     try {
       setError('');
-      setShowQRScanner(true);
       
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
+          facingMode: { ideal: 'environment' },
           width: { ideal: 1280 },
           height: { ideal: 720 }
         } 
       });
       
       setCameraStream(stream);
+      setShowQRScanner(true);
       
       setTimeout(() => {
         const video = videoRef.current;
-        if (video && stream) {
+        if (video && stream && stream.active) {
           video.srcObject = stream;
           video.play()
             .then(() => {
@@ -457,14 +447,17 @@ const MealTicketSystem = () => {
     setLoading(false);
     setCurrentPage('login');
   };
-  
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      stopQRScanner();
+      if (detectIntervalRef.current) {
+        clearInterval(detectIntervalRef.current);
+      }
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+      }
     };
-  }, [stopQRScanner]);
+  }, [cameraStream]);
 
   if (currentPage === 'login') {
     return (
@@ -675,24 +668,16 @@ const MealTicketSystem = () => {
             </div>
             <h2 className="text-3xl font-bold text-gray-800 mb-2">Meal Ticket Used!</h2>
             <p className="text-gray-600 mb-2">Successfully marked for {session?.name}</p>
-            <p className="text-sm text-gray-500 mb-2">
-              Date: {new Date().toLocaleDateString()}
-            </p>
-            <p className="text-sm text-gray-500 mb-2">
-              Time: {new Date().toLocaleTimeString()}
-            </p>
+            <p className="text-sm text-gray-500 mb-2">Date: {new Date().toLocaleDateString()}</p>
+            <p className="text-sm text-gray-500 mb-2">Time: {new Date().toLocaleTimeString()}</p>
             <div className="bg-indigo-100 border-2 border-indigo-300 rounded-lg p-3 mb-6">
               <p className="text-indigo-700 text-sm font-medium mb-1">Ticket Price</p>
               <p className="text-indigo-900 text-3xl font-bold">₦{session?.price || 0}</p>
             </div>
             
             <div className="bg-green-50 border-l-4 border-green-500 p-4 mb-6">
-              <p className="text-sm text-green-700 font-semibold">
-                ✓ Logged to Google Sheets
-              </p>
-              <p className="text-xs text-green-600 mt-1">
-                Session locked until tomorrow at 7 AM
-              </p>
+              <p className="text-sm text-green-700 font-semibold">✓ Logged to Google Sheets</p>
+              <p className="text-xs text-green-600 mt-1">Session locked until tomorrow at 7 AM</p>
             </div>
             
             <button
