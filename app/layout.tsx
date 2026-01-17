@@ -15,6 +15,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Meal Ticketing",
   description: "ELIZADE NIGERIA LIMITED MEAL TICKETING SYSTEM",
+    icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  }
 };
 
 export default function RootLayout({
