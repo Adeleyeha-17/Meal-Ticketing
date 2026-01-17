@@ -400,7 +400,7 @@ const MealTicketSystem = () => {
             <p className="text-gray-600">Login to access your meal ticket</p>
             <div className="mt-3 text-xs text-gray-500 bg-blue-50 px-3 py-2 rounded-lg flex items-center justify-center">
               <Clock className="inline-block mr-1" size={12} />
-              Available: Mon-Fri, 7AM - 11PM
+              Available: Mon-Fri, 7AM - 5PM
             </div>
           </div>
 
@@ -557,17 +557,11 @@ const MealTicketSystem = () => {
                               📹 Scanning for QR Code...
                             </p>
                           </div>
-                          
-                          <div className="absolute bottom-4 left-0 right-0 text-center">
-                            <p className="text-white text-sm bg-black/70 inline-block px-4 py-2 rounded-lg">
-                              Hold QR code steady within green frame
-                            </p>
-                          </div>
                         </div>
                         
                         <div className="bg-gray-800 p-3">
                           <p className="text-white text-xs text-center">
-                            💡 Make sure QR code is well-lit and clear
+                            💡 Hold QR code steady within green frame
                           </p>
                         </div>
                         
