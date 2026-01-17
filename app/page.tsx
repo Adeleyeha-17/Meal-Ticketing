@@ -53,7 +53,6 @@ const MealTicketSystem = () => {
   const detectIntervalRef = useRef<any>(null);
   const animationFrameRef = useRef<number | null>(null);
 
-  // Load jsQR library
   useEffect(() => {
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js';
@@ -73,7 +72,6 @@ const MealTicketSystem = () => {
     };
   }, []);
 
-  // Session check on mount
   useEffect(() => {
     const storedSession = localStorage.getItem('mealTicketSession');
     if (!storedSession) return;
@@ -110,7 +108,8 @@ const MealTicketSystem = () => {
       .catch(() => localStorage.removeItem('mealTicketSession'));
   }, []);
 
-  const handleLogin = async () => {
+  const handleLogin = async (e: any) => {
+    e.preventDefault();
     setError('');
     setLoading(true);
 
@@ -380,12 +379,6 @@ const MealTicketSystem = () => {
     };
   }, [cameraStream]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    handleLogin();
-  };
-
-  // LOGIN PAGE
   if (currentPage === 'login') {
     return (
       <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -411,7 +404,7 @@ const MealTicketSystem = () => {
                 type="text"
                 value={staffId}
                 onChange={(e) => setStaffId(e.target.value.toUpperCase())}
-                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                onKeyDown={(e) => e.key === 'Enter' && handleLogin(e)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none uppercase"
                 placeholder="ENTER STAFF ID"
                 required
@@ -426,7 +419,7 @@ const MealTicketSystem = () => {
                 type="text"
                 value={surname}
                 onChange={(e) => setSurname(e.target.value.toUpperCase())}
-                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                onKeyDown={(e) => e.key === 'Enter' && handleLogin(e)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none uppercase"
                 placeholder="ENTER SURNAME"
                 required
@@ -453,7 +446,6 @@ const MealTicketSystem = () => {
     );
   }
 
-  // DASHBOARD PAGE
   if (currentPage === 'dashboard') {
     return (
       <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 p-4">
@@ -594,7 +586,6 @@ const MealTicketSystem = () => {
     );
   }
 
-  // SUCCESS PAGE
   if (currentPage === 'success') {
     return (
       <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -637,7 +628,6 @@ const MealTicketSystem = () => {
     );
   }
 
-  // ALREADY USED PAGE
   if (currentPage === 'alreadyUsed') {
     return (
       <div className="min-h-screen bg-linear-to-br from-red-50 to-orange-100 flex items-center justify-center p-4">
