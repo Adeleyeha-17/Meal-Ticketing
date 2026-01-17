@@ -1,12 +1,13 @@
 "use client"
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Check, X, Clock, Users, Calendar, QrCode, AlertCircle } from 'lucide-react';
+import { Check, X, Clock, Users, Calendar, QrCode, AlertCircle, MapPin } from 'lucide-react';
 
 interface SessionData {
   id: string;
   name: string;
   department: string;
+  location: string;
   price: number;
   loginTime: string;
   sessionId: string;
@@ -15,6 +16,7 @@ interface SessionData {
 interface MealUsedInfo {
   name: string;
   department: string;
+  location: string;
   staffId: string;
   usedDate: string;
   usedTime: string;
@@ -51,10 +53,8 @@ const MealTicketSystem = () => {
   const detectIntervalRef = useRef<any>(null);
   const animationFrameRef = useRef<number | null>(null);
 
-  // ⚡ OPTIMIZATION: Load jsQR only once with better error handling
+  // Load jsQR library
   useEffect(() => {
-   
-
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js';
     script.async = true;
@@ -73,7 +73,7 @@ const MealTicketSystem = () => {
     };
   }, []);
 
-  // ⚡ OPTIMIZATION: Single batched session check on mount
+  // Session check on mount
   useEffect(() => {
     const storedSession = localStorage.getItem('mealTicketSession');
     if (!storedSession) return;
@@ -81,7 +81,6 @@ const MealTicketSystem = () => {
     const sessionData = JSON.parse(storedSession);
     const today = new Date().toISOString().split('T')[0];
     
-    // Single batched verification
     Promise.all([
       fetch(`${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=checkMeal&staffId=${sessionData.id}&date=${today}`).then(r => r.json()),
       fetch(`${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=verifySession&staffId=${sessionData.id}&sessionId=${sessionData.sessionId}`).then(r => r.json())
@@ -91,6 +90,7 @@ const MealTicketSystem = () => {
           setMealUsedInfo({
             name: sessionData.name,
             department: sessionData.department,
+            location: sessionData.location || mealData.location || 'Unknown',
             staffId: sessionData.id,
             usedDate: mealData.date || today,
             usedTime: mealData.time || 'Earlier today',
@@ -110,8 +110,7 @@ const MealTicketSystem = () => {
       .catch(() => localStorage.removeItem('mealTicketSession'));
   }, []);
 
-  const handleLogin = async (e: any) => {
-    e.preventDefault();
+  const handleLogin = async () => {
     setError('');
     setLoading(true);
 
@@ -131,6 +130,7 @@ const MealTicketSystem = () => {
           setMealUsedInfo({
             name: data.mealInfo.name,
             department: data.mealInfo.department,
+            location: data.mealInfo.location || 'Unknown',
             staffId: upperStaffId,
             usedDate: data.mealInfo.date,
             usedTime: data.mealInfo.time,
@@ -158,12 +158,12 @@ const MealTicketSystem = () => {
         id: upperStaffId,
         name: data.staff.name,
         department: data.staff.department,
+        location: data.staff.location || 'NOT SET',
         price: data.staff.price || 0,
         loginTime: new Date().toISOString(),
         sessionId: sessionId
       };
       
-      // ⚡ OPTIMIZATION: Don't await session registration, fire and forget
       fetch(
         `${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=registerSession&staffId=${upperStaffId}&sessionId=${sessionId}&loginTime=${sessionData.loginTime}`
       ).catch(console.error);
@@ -202,7 +202,7 @@ const MealTicketSystem = () => {
       });
       const today = new Date().toISOString().split('T')[0];
       
-      const url = `${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=logMeal&staffId=${encodeURIComponent(session.id)}&name=${encodeURIComponent(session.name)}&department=${encodeURIComponent(session.department)}&price=${encodeURIComponent(session.price || 0)}&date=${encodeURIComponent(today)}&time=${encodeURIComponent(timestamp)}`;
+      const url = `${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=logMeal&staffId=${encodeURIComponent(session.id)}&name=${encodeURIComponent(session.name)}&department=${encodeURIComponent(session.department)}&location=${encodeURIComponent(session.location)}&price=${encodeURIComponent(session.price || 0)}&date=${encodeURIComponent(today)}&time=${encodeURIComponent(timestamp)}`;
       
       const response = await fetch(url);
       const result = await response.json();
@@ -227,7 +227,6 @@ const MealTicketSystem = () => {
       detectIntervalRef.current = null;
     }
 
-    // ⚡ OPTIMIZATION: Cancel animation frame
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
@@ -246,7 +245,6 @@ const MealTicketSystem = () => {
     setShowQRScanner(false);
   }, [cameraStream]);
 
-  // ⚡ OPTIMIZATION: Use requestAnimationFrame instead of setInterval for smoother performance
   const startQRDetection = useCallback(() => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -257,12 +255,11 @@ const MealTicketSystem = () => {
     if (!context) return;
     
     let lastScanTime = 0;
-    const scanInterval = 300; // Scan every 300ms instead of 250ms
+    const scanInterval = 300;
     
     const detectFrame = (timestamp: number) => {
       if (!video || !canvas || !context) return;
       
-      // ⚡ Throttle scanning to reduce CPU usage
       if (timestamp - lastScanTime < scanInterval) {
         animationFrameRef.current = requestAnimationFrame(detectFrame);
         return;
@@ -271,7 +268,6 @@ const MealTicketSystem = () => {
       lastScanTime = timestamp;
       
       if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        // ⚡ Only update canvas size if it changed
         if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
@@ -299,7 +295,7 @@ const MealTicketSystem = () => {
                   setError('Invalid QR Code. Please scan the correct canteen QR code.');
                   setTimeout(() => setError(''), 5000);
                 }
-                return; // Stop animation loop after successful scan
+                return;
               }
             }
           } catch (err) {
@@ -334,7 +330,6 @@ const MealTicketSystem = () => {
       setCameraStream(stream);
       setShowQRScanner(true);
       
-      // ⚡ OPTIMIZATION: Reduced timeout
       setTimeout(() => {
         const video = videoRef.current;
         if (video && stream?.active) {
@@ -358,7 +353,6 @@ const MealTicketSystem = () => {
   const handleLogout = async () => {
     setLoading(true);
     
-    // ⚡ OPTIMIZATION: Fire and forget for session cleanup
     if (session?.sessionId && !mealUsedToday) {
       fetch(`${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=unregisterSession&staffId=${session.id}&sessionId=${session.sessionId}`)
         .catch(console.error);
@@ -378,7 +372,6 @@ const MealTicketSystem = () => {
     setCurrentPage('login');
   };
 
-  // ⚡ OPTIMIZATION: Cleanup on unmount
   useEffect(() => {
     return () => {
       if (detectIntervalRef.current) clearInterval(detectIntervalRef.current);
@@ -386,6 +379,11 @@ const MealTicketSystem = () => {
       if (cameraStream) cameraStream.getTracks().forEach(track => track.stop());
     };
   }, [cameraStream]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleLogin();
+  };
 
   // LOGIN PAGE
   if (currentPage === 'login') {
@@ -400,11 +398,11 @@ const MealTicketSystem = () => {
             <p className="text-gray-600">Login to access your meal ticket</p>
             <div className="mt-3 text-xs text-gray-500 bg-blue-50 px-3 py-2 rounded-lg flex items-center justify-center">
               <Clock className="inline-block mr-1" size={12} />
-              Available: Mon-Fri, 7AM - 5PM
+              Available: Mon-Fri, 7AM - 11PM
             </div>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-6">
+          <div className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Staff ID <span className="text-red-500">*</span>
@@ -413,6 +411,7 @@ const MealTicketSystem = () => {
                 type="text"
                 value={staffId}
                 onChange={(e) => setStaffId(e.target.value.toUpperCase())}
+                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none uppercase"
                 placeholder="ENTER STAFF ID"
                 required
@@ -427,6 +426,7 @@ const MealTicketSystem = () => {
                 type="text"
                 value={surname}
                 onChange={(e) => setSurname(e.target.value.toUpperCase())}
+                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none uppercase"
                 placeholder="ENTER SURNAME"
                 required
@@ -441,13 +441,13 @@ const MealTicketSystem = () => {
             )}
 
             <button
-              type="submit"
+              onClick={handleLogin}
               disabled={loading}
               className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Authenticating...' : 'Login'}
             </button>
-          </form>
+          </div>
         </div>
       </div>
     );
@@ -464,6 +464,10 @@ const MealTicketSystem = () => {
                 <div>
                   <h2 className="text-2xl font-bold mb-1">{session?.name}</h2>
                   <p className="text-indigo-200">ID: {session?.id} • {session?.department}</p>
+                  <div className="flex items-center gap-1 mt-2 text-indigo-100">
+                    <MapPin size={16} />
+                    <span className="text-sm">{session?.location}</span>
+                  </div>
                 </div>
                 <button
                   onClick={handleLogout}
@@ -603,6 +607,12 @@ const MealTicketSystem = () => {
             <p className="text-gray-600 mb-2">Successfully marked for {session?.name}</p>
             <p className="text-sm text-gray-500 mb-2">Date: {new Date().toLocaleDateString()}</p>
             <p className="text-sm text-gray-500 mb-2">Time: {new Date().toLocaleTimeString()}</p>
+            
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-3 flex items-center gap-2 justify-center">
+              <MapPin size={16} className="text-purple-600" />
+              <span className="text-purple-700 font-medium text-sm">{session?.location}</span>
+            </div>
+            
             <div className="bg-indigo-100 border-2 border-indigo-300 rounded-lg p-3 mb-6">
               <p className="text-indigo-700 text-sm font-medium mb-1">Ticket Price</p>
               <p className="text-indigo-900 text-3xl font-bold">₦{session?.price?.toLocaleString() || 0}</p>
@@ -646,6 +656,9 @@ const MealTicketSystem = () => {
               <div className="text-xs text-red-600 space-y-1">
                 <p>• Staff ID: {mealUsedInfo?.staffId}</p>
                 <p>• Department: {mealUsedInfo?.department}</p>
+                <p className="flex items-center gap-1">
+                  • Location: <MapPin size={12} className="inline" /> {mealUsedInfo?.location}
+                </p>
                 <p>• Price: ₦{mealUsedInfo?.price?.toLocaleString() || 0}</p>
                 <p>• Used on: {mealUsedInfo?.usedDate}</p>
                 <p>• Time: {mealUsedInfo?.usedTime}</p>
