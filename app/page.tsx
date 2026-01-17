@@ -25,7 +25,24 @@ interface MealUsedInfo {
 
 declare global {
   interface Window {
-    jsQR?: any;
+    jsQR?: {
+      (imageData: Uint8ClampedArray, width: number, height: number, options?: {
+        inversionAttempts?: string;
+        greyScaleWeights?: {
+          red: number;
+          green: number;
+          blue: number;
+        };
+      }): {
+        data: string;
+        location: {
+          topRightCorner: { x: number; y: number };
+          topLeftCorner: { x: number; y: number };
+          bottomRightCorner: { x: number; y: number };
+          bottomLeftCorner: { x: number; y: number };
+        };
+      } | null;
+    };
   }
 }
 
@@ -50,7 +67,7 @@ const MealTicketSystem = () => {
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const detectIntervalRef = useRef<any>(null);
+  const detectIntervalRef = useRef<number | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -108,7 +125,7 @@ const MealTicketSystem = () => {
       .catch(() => localStorage.removeItem('mealTicketSession'));
   }, []);
 
-  const handleLogin = async (e: any) => {
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement> | React.MouseEvent<HTMLButtonElement> | React.KeyboardEvent<HTMLInputElement>) => {
     e.preventDefault();
     setError('');
     setLoading(true);
@@ -343,7 +360,7 @@ const MealTicketSystem = () => {
         }
       }, 200);
       
-    } catch (err) {
+    } catch {
       setError('Camera access denied. Please enable camera permissions.');
       setShowQRScanner(false);
     }
@@ -391,7 +408,7 @@ const MealTicketSystem = () => {
             <p className="text-gray-600">Login to access your meal ticket</p>
             <div className="mt-3 text-xs text-gray-500 bg-blue-50 px-3 py-2 rounded-lg flex items-center justify-center">
               <Clock className="inline-block mr-1" size={12} />
-              Available: Mon-Fri, 7AM - 11PM
+              Available: Mon-Fri, 7AM - 5PM
             </div>
           </div>
 
@@ -664,7 +681,7 @@ const MealTicketSystem = () => {
                 Tomorrow at 7:00 AM
               </p>
               <p className="text-xs text-blue-700 mt-2">
-                Monday - Friday only • Expires daily at 11:00 PM
+                Monday - Friday only • Expires daily at 5:00 PM
               </p>
             </div>
             
