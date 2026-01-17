@@ -49,86 +49,67 @@ const MealTicketSystem = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const detectIntervalRef = useRef<any>(null);
+  const animationFrameRef = useRef<number | null>(null);
 
+  // ⚡ OPTIMIZATION: Load jsQR only once with better error handling
   useEffect(() => {
-    const loadJsQR = async () => {
-      const cdnUrls = [
-        'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js',
-        'https://unpkg.com/jsqr@1.4.0/dist/jsQR.min.js'
-      ];
+   
 
-      for (const url of cdnUrls) {
-        try {
-          const script = document.createElement('script');
-          script.src = url;
-          
-          const loadPromise = new Promise<void>((resolve, reject) => {
-            script.onload = () => {
-              setJsQRLoaded(true);
-              resolve();
-            };
-            script.onerror = () => reject(new Error(`Failed to load from ${url}`));
-          });
-
-          document.body.appendChild(script);
-          await loadPromise;
-          return;
-        } catch (err) {
-          continue;
-        }
-      }
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js';
+    script.async = true;
+    script.onload = () => setJsQRLoaded(true);
+    script.onerror = () => {
+      const fallback = document.createElement('script');
+      fallback.src = 'https://unpkg.com/jsqr@1.4.0/dist/jsQR.min.js';
+      fallback.async = true;
+      fallback.onload = () => setJsQRLoaded(true);
+      document.body.appendChild(fallback);
     };
+    document.body.appendChild(script);
 
-    loadJsQR();
+    return () => {
+      if (script.parentNode) script.parentNode.removeChild(script);
+    };
   }, []);
 
-  // OPTIMIZED: Single check on mount
+  // ⚡ OPTIMIZATION: Single batched session check on mount
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
     const storedSession = localStorage.getItem('mealTicketSession');
+    if (!storedSession) return;
+
+    const sessionData = JSON.parse(storedSession);
+    const today = new Date().toISOString().split('T')[0];
     
-    if (storedSession) {
-      const sessionData = JSON.parse(storedSession);
-      
-      // Single batched verification call
-      Promise.all([
-        fetch(`${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=checkMeal&staffId=${sessionData.id}&date=${today}`),
-        fetch(`${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=verifySession&staffId=${sessionData.id}&sessionId=${sessionData.sessionId}`)
-      ])
-        .then(async ([mealRes, sessionRes]) => {
-          const mealData = await mealRes.json();
-          const sessionValid = await sessionRes.json();
-          
-          if (mealData.used) {
-            setMealUsedInfo({
-              name: sessionData.name,
-              department: sessionData.department,
-              staffId: sessionData.id,
-              usedDate: mealData.date || today,
-              usedTime: mealData.time || 'Earlier today',
-              price: mealData.price || 0
-            });
-            localStorage.removeItem('mealTicketSession');
-            setCurrentPage('alreadyUsed');
-            return;
-          }
-          
-          if (sessionValid.valid) {
-            setSession(sessionData);
-            setMealUsedToday(false);
-            setCurrentPage('dashboard');
-          } else {
-            localStorage.removeItem('mealTicketSession');
-            setError('Your session has expired or you logged in on another device.');
-          }
-        })
-        .catch(() => {
+    // Single batched verification
+    Promise.all([
+      fetch(`${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=checkMeal&staffId=${sessionData.id}&date=${today}`).then(r => r.json()),
+      fetch(`${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=verifySession&staffId=${sessionData.id}&sessionId=${sessionData.sessionId}`).then(r => r.json())
+    ])
+      .then(([mealData, sessionValid]) => {
+        if (mealData.used) {
+          setMealUsedInfo({
+            name: sessionData.name,
+            department: sessionData.department,
+            staffId: sessionData.id,
+            usedDate: mealData.date || today,
+            usedTime: mealData.time || 'Earlier today',
+            price: mealData.price || 0
+          });
           localStorage.removeItem('mealTicketSession');
-        });
-    }
+          setCurrentPage('alreadyUsed');
+        } else if (sessionValid.valid) {
+          setSession(sessionData);
+          setMealUsedToday(false);
+          setCurrentPage('dashboard');
+        } else {
+          localStorage.removeItem('mealTicketSession');
+          setError('Your session has expired or you logged in on another device.');
+        }
+      })
+      .catch(() => localStorage.removeItem('mealTicketSession'));
   }, []);
 
-  // OPTIMIZED: Single batch login call
   const handleLogin = async (e: any) => {
     e.preventDefault();
     setError('');
@@ -139,7 +120,6 @@ const MealTicketSystem = () => {
       const upperStaffId = staffId.toUpperCase().trim();
       const upperSurname = surname.toUpperCase().trim();
       
-      // SINGLE API CALL for all validation
       const response = await fetch(
         `${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=batchLogin&staffId=${encodeURIComponent(upperStaffId)}&surname=${encodeURIComponent(upperSurname)}&date=${today}`
       );
@@ -173,7 +153,6 @@ const MealTicketSystem = () => {
         return;
       }
 
-      // Register session
       const sessionId = `${upperStaffId}_${Date.now()}`;
       const sessionData = {
         id: upperStaffId,
@@ -184,9 +163,10 @@ const MealTicketSystem = () => {
         sessionId: sessionId
       };
       
-      await fetch(
+      // ⚡ OPTIMIZATION: Don't await session registration, fire and forget
+      fetch(
         `${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=registerSession&staffId=${upperStaffId}&sessionId=${sessionId}&loginTime=${sessionData.loginTime}`
-      );
+      ).catch(console.error);
       
       setSession(sessionData);
       localStorage.setItem('mealTicketSession', JSON.stringify(sessionData));
@@ -201,7 +181,6 @@ const MealTicketSystem = () => {
     setLoading(false);
   };
 
-  // OPTIMIZED: Direct meal verification
   const verifyMeal = useCallback(async () => {
     if (!session) {
       setCurrentPage('login');
@@ -248,6 +227,12 @@ const MealTicketSystem = () => {
       detectIntervalRef.current = null;
     }
 
+    // ⚡ OPTIMIZATION: Cancel animation frame
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
     if (cameraStream) {
       cameraStream.getTracks().forEach(track => track.stop());
     }
@@ -261,35 +246,48 @@ const MealTicketSystem = () => {
     setShowQRScanner(false);
   }, [cameraStream]);
 
+  // ⚡ OPTIMIZATION: Use requestAnimationFrame instead of setInterval for smoother performance
   const startQRDetection = useCallback(() => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     
     if (!video || !canvas) return;
     
-    const context = canvas.getContext('2d');
+    const context = canvas.getContext('2d', { willReadFrequently: true });
     if (!context) return;
     
-    detectIntervalRef.current = setInterval(() => {
+    let lastScanTime = 0;
+    const scanInterval = 300; // Scan every 300ms instead of 250ms
+    
+    const detectFrame = (timestamp: number) => {
+      if (!video || !canvas || !context) return;
+      
+      // ⚡ Throttle scanning to reduce CPU usage
+      if (timestamp - lastScanTime < scanInterval) {
+        animationFrameRef.current = requestAnimationFrame(detectFrame);
+        return;
+      }
+      
+      lastScanTime = timestamp;
+      
       if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
+        // ⚡ Only update canvas size if it changed
+        if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+        }
         
         if (canvas.width > 0 && canvas.height > 0) {
           context.drawImage(video, 0, 0, canvas.width, canvas.height);
           const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
           
           try {
-            if (typeof window !== 'undefined' && window.jsQR) {
+            if (window.jsQR) {
               const code = window.jsQR(imageData.data, imageData.width, imageData.height, {
                 inversionAttempts: "dontInvert",
               });
               
-              if (code && code.data) {
-                if (detectIntervalRef.current) {
-                  clearInterval(detectIntervalRef.current);
-                  detectIntervalRef.current = null;
-                }
+              if (code?.data) {
                 stopQRScanner();
                 
                 const detectedCode = code.data.trim();
@@ -298,17 +296,22 @@ const MealTicketSystem = () => {
                 if (detectedCode === expectedCode) {
                   verifyMeal();
                 } else {
-                  setError('Invalid QR Code. Please scan the correct cafeteria QR code.');
+                  setError('Invalid QR Code. Please scan the correct canteen QR code.');
                   setTimeout(() => setError(''), 5000);
                 }
+                return; // Stop animation loop after successful scan
               }
             }
           } catch (err) {
-            // Silent
+            console.error('QR detection error:', err);
           }
         }
       }
-    }, 250);
+      
+      animationFrameRef.current = requestAnimationFrame(detectFrame);
+    };
+    
+    animationFrameRef.current = requestAnimationFrame(detectFrame);
   }, [stopQRScanner, verifyMeal]);
 
   const startQRScanner = async () => {
@@ -331,19 +334,20 @@ const MealTicketSystem = () => {
       setCameraStream(stream);
       setShowQRScanner(true);
       
+      // ⚡ OPTIMIZATION: Reduced timeout
       setTimeout(() => {
         const video = videoRef.current;
-        if (video && stream && stream.active) {
+        if (video && stream?.active) {
           video.srcObject = stream;
           video.play()
             .then(() => {
-              setTimeout(startQRDetection, 500);
+              setTimeout(startQRDetection, 300);
             })
             .catch(() => {
               setError('Failed to start video');
             });
         }
-      }, 300);
+      }, 200);
       
     } catch (err) {
       setError('Camera access denied. Please enable camera permissions.');
@@ -354,12 +358,10 @@ const MealTicketSystem = () => {
   const handleLogout = async () => {
     setLoading(true);
     
+    // ⚡ OPTIMIZATION: Fire and forget for session cleanup
     if (session?.sessionId && !mealUsedToday) {
-      try {
-        await fetch(`${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=unregisterSession&staffId=${session.id}&sessionId=${session.sessionId}`);
-      } catch (err) {
-        console.error('Unregister error:', err);
-      }
+      fetch(`${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=unregisterSession&staffId=${session.id}&sessionId=${session.sessionId}`)
+        .catch(console.error);
     }
     
     localStorage.removeItem('mealTicketSession');
@@ -376,21 +378,19 @@ const MealTicketSystem = () => {
     setCurrentPage('login');
   };
 
+  // ⚡ OPTIMIZATION: Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (detectIntervalRef.current) {
-        clearInterval(detectIntervalRef.current);
-      }
-      if (cameraStream) {
-        cameraStream.getTracks().forEach(track => track.stop());
-      }
+      if (detectIntervalRef.current) clearInterval(detectIntervalRef.current);
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      if (cameraStream) cameraStream.getTracks().forEach(track => track.stop());
     };
   }, [cameraStream]);
 
   // LOGIN PAGE
   if (currentPage === 'login') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
           <div className="text-center mb-8">
             <div className="bg-indigo-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -398,9 +398,9 @@ const MealTicketSystem = () => {
             </div>
             <h1 className="text-3xl font-bold text-gray-800 mb-2">Meal Ticket System</h1>
             <p className="text-gray-600">Login to access your meal ticket</p>
-            <div className="mt-3 text-xs text-gray-500 bg-blue-50 px-3 py-2 rounded-lg">
+            <div className="mt-3 text-xs text-gray-500 bg-blue-50 px-3 py-2 rounded-lg flex items-center justify-center">
               <Clock className="inline-block mr-1" size={12} />
-              Available: Mon-Fri, 7AM - 5PM
+              Available: Mon-Fri, 7AM - 11PM
             </div>
           </div>
 
@@ -435,7 +435,7 @@ const MealTicketSystem = () => {
 
             {error && (
               <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg flex items-start gap-2">
-                <AlertCircle size={20} className="flex-shrink-0 mt-0.5" />
+                <AlertCircle size={20} className="shrink-0 mt-0.5" />
                 <span className="text-sm">{error}</span>
               </div>
             )}
@@ -456,7 +456,7 @@ const MealTicketSystem = () => {
   // DASHBOARD PAGE
   if (currentPage === 'dashboard') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+      <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 p-4">
         <div className="max-w-4xl mx-auto">
           <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
             <div className="bg-indigo-600 text-white p-6">
@@ -470,7 +470,7 @@ const MealTicketSystem = () => {
                   disabled={loading}
                   className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg text-sm transition disabled:opacity-50"
                 >
-                  {loading ? 'Logging out...' : 'Logout'}
+                  Logout
                 </button>
               </div>
             </div>
@@ -515,7 +515,7 @@ const MealTicketSystem = () => {
                     <p className={`text-sm ${mealUsedToday ? 'text-green-700' : 'text-amber-700'}`}>
                       {mealUsedToday 
                         ? 'You have already used your meal ticket today' 
-                        : 'Scan the QR code at the cafeteria to use your meal ticket'}
+                        : 'Scan the QR code at the canteen to use your meal ticket'}
                     </p>
                   </div>
                 </div>
@@ -584,7 +584,7 @@ const MealTicketSystem = () => {
 
                 {error && (
                   <div className="mt-4 bg-red-50 text-red-600 px-4 py-3 rounded-lg flex items-start gap-2">
-                    <AlertCircle size={20} className="flex-shrink-0 mt-0.5" />
+                    <AlertCircle size={20} className="shrink-0 mt-0.5" />
                     <span className="text-sm">{error}</span>
                   </div>
                 )}
@@ -599,7 +599,7 @@ const MealTicketSystem = () => {
   // SUCCESS PAGE
   if (currentPage === 'success') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
           <div className="text-center">
             <div className="bg-green-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -616,8 +616,8 @@ const MealTicketSystem = () => {
             
             <div className="bg-green-50 border-l-4 border-green-500 p-4 mb-6">
               <p className="text-sm text-green-700 font-semibold">✓ STATUS: USED</p>
-              <p className="text-xs text-green-600 mt-1">Logged to Google Sheets successfully</p>
-              <p className="text-xs text-green-600">Session locked until tomorrow at 7 AM</p>
+              <p className="text-xs text-green-600 mt-1">Your meal ticket has been successfully used for today.</p>
+              <p className="text-xs text-green-600">You may use your next ticket starting tomorrow at 7:00 AM.</p>
             </div>
             
             <button
@@ -636,7 +636,7 @@ const MealTicketSystem = () => {
   // ALREADY USED PAGE
   if (currentPage === 'alreadyUsed') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-linear-to-br from-red-50 to-orange-100 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
           <div className="text-center">
             <div className="bg-red-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -667,7 +667,7 @@ const MealTicketSystem = () => {
                 Tomorrow at 7:00 AM
               </p>
               <p className="text-xs text-blue-700 mt-2">
-                Monday - Friday only • Expires daily at 5:00 PM
+                Monday - Friday only • Expires daily at 11:00 PM
               </p>
             </div>
             
