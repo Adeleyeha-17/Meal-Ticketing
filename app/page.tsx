@@ -698,7 +698,7 @@ const MealTicketSystem = () => {
      
       <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-sm border-t border-gray-200 py-3 z-50">
         <p className="text-center text-xs text-gray-600">
-          © {new Date().getFullYear()} ICT. All rights reserved.
+          © {new Date().getFullYear()} ENL ICT. All rights reserved.
         </p>
       </div>
     </>
