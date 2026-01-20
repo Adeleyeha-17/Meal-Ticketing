@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -69,7 +70,7 @@ const MealTicketSystem = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const detectIntervalRef = useRef<number | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const hiddenFormRef = useRef<HTMLFormElement>(null);
+  const loginFormRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     const script = document.createElement('script');
@@ -141,18 +142,14 @@ const MealTicketSystem = () => {
         price: data.staff.price || 0
       };
       
-      // SUCCESS! Now trigger browser password save
+      // SUCCESS! Set session and show success state
       setSession(sessionData);
       setMealUsedToday(false);
       setLoading(false);
       setShowLoginSuccess(true);
       
-      // Submit the hidden form to trigger password manager
-      if (hiddenFormRef.current) {
-        hiddenFormRef.current.submit();
-      }
-      
-      // Wait for browser to offer password save, then navigate
+      // Browser will now capture the password from the form that was just submitted
+      // Wait briefly then navigate to dashboard
       setTimeout(() => {
         setShowLoginSuccess(false);
         setCurrentPage('dashboard');
@@ -406,21 +403,6 @@ const MealTicketSystem = () => {
         }
       `}</style>
 
-      {/* Hidden iframe for password manager trick */}
-      <iframe name="hidden_iframe" style={{ display: 'none' }}></iframe>
-      
-      {/* Hidden form that submits to iframe */}
-      <form
-        ref={hiddenFormRef}
-        method="post"
-        action="about:blank"
-        target="hidden_iframe"
-        style={{ display: 'none' }}
-      >
-        <input type="text" name="username" value={staffId} readOnly />
-        <input type="password" name="password" value={surname} readOnly />
-      </form>
-
       {currentPage === 'login' && (
         <div className="page-transition min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4 pb-20">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 relative">
@@ -436,7 +418,13 @@ const MealTicketSystem = () => {
               </div>
             </div>
 
-            <form onSubmit={handleLogin} method="post" action="#" className="space-y-6">
+            <form 
+              ref={loginFormRef}
+              onSubmit={handleLogin} 
+              method="post" 
+              action="#" 
+              className="space-y-6"
+            >
               <div>
                 <label htmlFor="staffId" className="block text-sm font-medium text-gray-700 mb-2">
                   Staff ID <span className="text-red-500">*</span>
