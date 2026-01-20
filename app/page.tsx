@@ -88,66 +88,70 @@ const MealTicketSystem = () => {
     };
   }, []);
 
-  const handleLogin = useCallback(async () => {
-    setError('');
-    setLoading(true);
+ const handleLogin = useCallback(async (e?: React.FormEvent) => {
+  if (e) {
+    e.preventDefault();
+  }
+  
+  setError('');
+  setLoading(true);
 
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const upperStaffId = staffId.toUpperCase().trim();
-      const upperSurname = surname.toUpperCase().trim();
-      
-      const response = await fetch(
-        `${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=batchLogin&staffId=${encodeURIComponent(upperStaffId)}&surname=${encodeURIComponent(upperSurname)}&date=${today}`
-      );
-      
-      const data = await response.json();
-      
-      if (!data.success) {
-        if (data.errorType === 'ALREADY_USED') {
-          setMealUsedInfo({
-            name: data.mealInfo.name,
-            department: data.mealInfo.department,
-            location: data.mealInfo.location || 'Unknown',
-            staffId: upperStaffId,
-            usedDate: data.mealInfo.date,
-            usedTime: data.mealInfo.time,
-            price: data.mealInfo.price || 0
-          });
-          setLoading(false);
-          setCurrentPage('alreadyUsed');
-          return;
-        }
-        
-        if (data.errorType === 'TIME_EXPIRED') {
-          setError(data.error);
-        } else {
-          setError(data.error || 'Invalid Staff ID or Surname');
-        }
-        
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const upperStaffId = staffId.toUpperCase().trim();
+    const upperSurname = surname.toUpperCase().trim();
+    
+    const response = await fetch(
+      `${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=batchLogin&staffId=${encodeURIComponent(upperStaffId)}&surname=${encodeURIComponent(upperSurname)}&date=${today}`
+    );
+    
+    const data = await response.json();
+    
+    if (!data.success) {
+      if (data.errorType === 'ALREADY_USED') {
+        setMealUsedInfo({
+          name: data.mealInfo.name,
+          department: data.mealInfo.department,
+          location: data.mealInfo.location || 'Unknown',
+          staffId: upperStaffId,
+          usedDate: data.mealInfo.date,
+          usedTime: data.mealInfo.time,
+          price: data.mealInfo.price || 0
+        });
         setLoading(false);
+        setCurrentPage('alreadyUsed');
         return;
       }
-
-      const sessionData = {
-        id: upperStaffId,
-        name: data.staff.name,
-        department: data.staff.department,
-        location: data.staff.location || 'NOT SET',
-        price: data.staff.price || 0
-      };
       
-      setSession(sessionData);
-      setMealUsedToday(false);
-      setCurrentPage('dashboard');
+      if (data.errorType === 'TIME_EXPIRED') {
+        setError(data.error);
+      } else {
+        setError(data.error || 'Invalid Staff ID or Surname');
+      }
       
-    } catch (err) {
-      console.error('Login error:', err);
-      setError('Connection failed. Please check your internet connection.');
+      setLoading(false);
+      return;
     }
+
+    const sessionData = {
+      id: upperStaffId,
+      name: data.staff.name,
+      department: data.staff.department,
+      location: data.staff.location || 'NOT SET',
+      price: data.staff.price || 0
+    };
     
-    setLoading(false);
-  }, [staffId, surname]);
+    setSession(sessionData);
+    setMealUsedToday(false);
+    setCurrentPage('dashboard');
+    
+  } catch (err) {
+    console.error('Login error:', err);
+    setError('Connection failed. Please check your internet connection.');
+  }
+  
+  setLoading(false);
+}, [staffId, surname]);
 
   const verifyMeal = useCallback(async () => {
     if (!session) {
@@ -334,12 +338,6 @@ const MealTicketSystem = () => {
     setCurrentPage('login');
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      handleLogin();
-    }
-  };
-
   useEffect(() => {
     return () => {
       if (detectIntervalRef.current) clearInterval(detectIntervalRef.current);
@@ -380,66 +378,74 @@ const MealTicketSystem = () => {
               </div>
             </div>
 
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Staff ID <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="username"
-                  autoComplete="username"
-                  value={staffId}
-                  onChange={(e) => setStaffId(e.target.value.toUpperCase())}
-                  onKeyPress={handleKeyPress}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none uppercase"
-                  placeholder="ENTER STAFF ID"
-                  required
-                />
-              </div>
-
-              <div>
-  <label className="block text-sm font-medium text-gray-700 mb-2">
-    Surname <span className="text-red-500">*</span>
-  </label>
-  <div className="relative">
+           <form onSubmit={handleLogin} className="space-y-6">
+  <div>
+    <label htmlFor="staffId" className="block text-sm font-medium text-gray-700 mb-2">
+      Staff ID <span className="text-red-500">*</span>
+    </label>
     <input
-      type={showPassword ? "text" : "password"}
-      name="password"
-      autoComplete="current-password"
-      value={surname}
-      onChange={(e) => setSurname(e.target.value.toUpperCase())}
-      onKeyPress={handleKeyPress}
-      className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none uppercase"
-      placeholder="ENTER SURNAME"
+      id="staffId"
+      type="text"
+      name="username"
+      autoComplete="username"
+      value={staffId}
+      onChange={(e) => setStaffId(e.target.value.toUpperCase())}
+      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none uppercase"
+      placeholder="ENTER STAFF ID"
       required
     />
-    <button
-      type="button"
-      onClick={() => setShowPassword(!showPassword)}
-      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
-      aria-label={showPassword ? "Hide password" : "Show password"}
-    >
-      {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-    </button>
   </div>
-</div>
 
-              {error && (
-                <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg flex items-start gap-2">
-                  <AlertCircle size={20} className="shrink-0 mt-0.5" />
-                  <span className="text-sm">{error}</span>
-                </div>
-              )}
+  <div>
+    <label htmlFor="surname" className="block text-sm font-medium text-gray-700 mb-2">
+      Surname <span className="text-red-500">*</span>
+    </label>
+    <div className="relative">
+      <input
+        id="surname"
+        type={showPassword ? "text" : "password"}
+        name="password"
+        autoComplete="current-password"
+        value={surname}
+        onChange={(e) => setSurname(e.target.value.toUpperCase())}
+        className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none uppercase"
+        placeholder="ENTER SURNAME"
+        required
+      />
+     <button
+  type="button"
+  onMouseDown={(e) => {
+    e.preventDefault();
+    setShowPassword(!showPassword);
+  }}
+  onTouchStart={(e) => {
+    e.preventDefault();
+    setShowPassword(!showPassword);
+  }}
+  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none flex items-center justify-center"
+  aria-label={showPassword ? "Hide password" : "Show password"}
+  tabIndex={-1}
+>
+  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+</button>
+    </div>
+  </div>
 
-              <button
-                onClick={handleLogin}
-                disabled={loading}
-                className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? 'Authenticating...' : 'Login'}
-              </button>
-            </div>
+  {error && (
+    <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg flex items-start gap-2">
+      <AlertCircle size={20} className="shrink-0 mt-0.5" />
+      <span className="text-sm">{error}</span>
+    </div>
+  )}
+
+  <button
+    type="submit"
+    disabled={loading}
+    className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+  >
+    {loading ? 'Authenticating...' : 'Login'}
+  </button>
+</form>
           </div>
         </div>
       )}
