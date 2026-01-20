@@ -88,10 +88,8 @@ const MealTicketSystem = () => {
     };
   }, []);
 
- const handleLogin = useCallback(async (e?: React.FormEvent) => {
-  if (e) {
-    e.preventDefault();
-  }
+ const handleLogin = useCallback(async (e: React.FormEvent) => {
+  e.preventDefault();
   
   setError('');
   setLoading(true);
@@ -119,7 +117,7 @@ const MealTicketSystem = () => {
           price: data.mealInfo.price || 0
         });
         setLoading(false);
-        setCurrentPage('alreadyUsed');
+        setTimeout(() => setCurrentPage('alreadyUsed'), 100);
         return;
       }
       
@@ -143,7 +141,7 @@ const MealTicketSystem = () => {
     
     setSession(sessionData);
     setMealUsedToday(false);
-    setCurrentPage('dashboard');
+    setTimeout(() => setCurrentPage('dashboard'), 100);
     
   } catch (err) {
     console.error('Login error:', err);
@@ -378,7 +376,7 @@ const MealTicketSystem = () => {
               </div>
             </div>
 
-           <form onSubmit={handleLogin} className="space-y-6">
+       <form onSubmit={handleLogin} method="post" action="#" className="space-y-6">
   <div>
     <label htmlFor="staffId" className="block text-sm font-medium text-gray-700 mb-2">
       Staff ID <span className="text-red-500">*</span>
@@ -412,22 +410,20 @@ const MealTicketSystem = () => {
         placeholder="ENTER SURNAME"
         required
       />
-     <button
-  type="button"
-  onMouseDown={(e) => {
-    e.preventDefault();
-    setShowPassword(!showPassword);
-  }}
-  onTouchStart={(e) => {
-    e.preventDefault();
-    setShowPassword(!showPassword);
-  }}
-  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none flex items-center justify-center"
-  aria-label={showPassword ? "Hide password" : "Show password"}
-  tabIndex={-1}
->
-  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-</button>
+      <div
+        onTouchEnd={(e) => {
+          e.preventDefault();
+          setShowPassword(!showPassword);
+        }}
+        onClick={(e) => {
+          e.preventDefault();
+          setShowPassword(!showPassword);
+        }}
+        className="absolute right-0 top-0 h-full px-4 text-gray-500 active:text-gray-900 flex items-center justify-center cursor-pointer select-none"
+        style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
+      >
+        {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+      </div>
     </div>
   </div>
 
