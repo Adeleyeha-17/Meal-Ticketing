@@ -378,7 +378,7 @@ const MealTicketSystem = () => {
               </div>
             </div>
 
-      <form onSubmit={handleLogin} className="space-y-6">
+           <form onSubmit={handleLogin} className="space-y-6">
   <div>
     <label htmlFor="staffId" className="block text-sm font-medium text-gray-700 mb-2">
       Staff ID <span className="text-red-500">*</span>
@@ -402,33 +402,32 @@ const MealTicketSystem = () => {
     </label>
     <div className="relative">
       <input
-  id="surname"
-  type="password"
-  name="password"
-  autoComplete="current-password"
-  value={surname}
-  onChange={(e) => setSurname(e.target.value.toUpperCase())}
-  style={showPassword ? { 
-    WebkitTextSecurity: 'none'
-  } as React.CSSProperties : {}}
-  className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none uppercase"
-  placeholder="ENTER SURNAME"
-  required
-/>
-      <button
-        type="button"
-        onPointerDown={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setShowPassword(!showPassword);
-        }}
-        className="absolute right-0 top-0 h-full px-4 text-gray-500 hover:text-gray-700 active:text-gray-900 focus:outline-none flex items-center justify-center"
-        aria-label={showPassword ? "Hide password" : "Show password"}
-        tabIndex={-1}
-        style={{ touchAction: 'manipulation' }}
-      >
-        {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-      </button>
+        id="surname"
+        type={showPassword ? "text" : "password"}
+        name="password"
+        autoComplete="current-password"
+        value={surname}
+        onChange={(e) => setSurname(e.target.value.toUpperCase())}
+        className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none uppercase"
+        placeholder="ENTER SURNAME"
+        required
+      />
+     <button
+  type="button"
+  onMouseDown={(e) => {
+    e.preventDefault();
+    setShowPassword(!showPassword);
+  }}
+  onTouchStart={(e) => {
+    e.preventDefault();
+    setShowPassword(!showPassword);
+  }}
+  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none flex items-center justify-center"
+  aria-label={showPassword ? "Hide password" : "Show password"}
+  tabIndex={-1}
+>
+  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+</button>
     </div>
   </div>
 
