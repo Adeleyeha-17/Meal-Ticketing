@@ -63,6 +63,7 @@ const MealTicketSystem = () => {
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [mealUsedInfo, setMealUsedInfo] = useState<MealUsedInfo | null>(null);
   const [jsQRLoaded, setJsQRLoaded] = useState<boolean>(false);
+  const [showLoginSuccess, setShowLoginSuccess] = useState<boolean>(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -88,68 +89,76 @@ const MealTicketSystem = () => {
     };
   }, []);
 
- const handleLogin = useCallback(async (e: React.FormEvent) => {
-  e.preventDefault();
-  
-  setError('');
-  setLoading(true);
+  const handleLogin = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    setError('');
+    setLoading(true);
 
-  try {
-    const today = new Date().toISOString().split('T')[0];
-    const upperStaffId = staffId.toUpperCase().trim();
-    const upperSurname = surname.toUpperCase().trim();
-    
-    const response = await fetch(
-      `${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=batchLogin&staffId=${encodeURIComponent(upperStaffId)}&surname=${encodeURIComponent(upperSurname)}&date=${today}`
-    );
-    
-    const data = await response.json();
-    
-    if (!data.success) {
-      if (data.errorType === 'ALREADY_USED') {
-        setMealUsedInfo({
-          name: data.mealInfo.name,
-          department: data.mealInfo.department,
-          location: data.mealInfo.location || 'Unknown',
-          staffId: upperStaffId,
-          usedDate: data.mealInfo.date,
-          usedTime: data.mealInfo.time,
-          price: data.mealInfo.price || 0
-        });
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const upperStaffId = staffId.toUpperCase().trim();
+      const upperSurname = surname.toUpperCase().trim();
+      
+      const response = await fetch(
+        `${GOOGLE_SHEETS_CONFIG.SCRIPT_URL}?action=batchLogin&staffId=${encodeURIComponent(upperStaffId)}&surname=${encodeURIComponent(upperSurname)}&date=${today}`
+      );
+      
+      const data = await response.json();
+      
+      if (!data.success) {
+        if (data.errorType === 'ALREADY_USED') {
+          setMealUsedInfo({
+            name: data.mealInfo.name,
+            department: data.mealInfo.department,
+            location: data.mealInfo.location || 'Unknown',
+            staffId: upperStaffId,
+            usedDate: data.mealInfo.date,
+            usedTime: data.mealInfo.time,
+            price: data.mealInfo.price || 0
+          });
+          setLoading(false);
+          setTimeout(() => setCurrentPage('alreadyUsed'), 100);
+          return;
+        }
+        
+        if (data.errorType === 'TIME_EXPIRED') {
+          setError(data.error);
+        } else {
+          setError(data.error || 'Invalid Staff ID or Surname');
+        }
+        
         setLoading(false);
-        setTimeout(() => setCurrentPage('alreadyUsed'), 100);
         return;
       }
-      
-      if (data.errorType === 'TIME_EXPIRED') {
-        setError(data.error);
-      } else {
-        setError(data.error || 'Invalid Staff ID or Surname');
-      }
-      
-      setLoading(false);
-      return;
-    }
 
-    const sessionData = {
-      id: upperStaffId,
-      name: data.staff.name,
-      department: data.staff.department,
-      location: data.staff.location || 'NOT SET',
-      price: data.staff.price || 0
-    };
-    
-    setSession(sessionData);
-    setMealUsedToday(false);
-    setTimeout(() => setCurrentPage('dashboard'), 100);
-    
-  } catch (err) {
-    console.error('Login error:', err);
-    setError('Connection failed. Please check your internet connection.');
-  }
-  
-  setLoading(false);
-}, [staffId, surname]);
+      const sessionData = {
+        id: upperStaffId,
+        name: data.staff.name,
+        department: data.staff.department,
+        location: data.staff.location || 'NOT SET',
+        price: data.staff.price || 0
+      };
+      
+      setSession(sessionData);
+      setMealUsedToday(false);
+      setLoading(false);
+      
+      // Show success overlay while keeping form mounted
+      setShowLoginSuccess(true);
+      
+      // Wait for browser to offer password save, then navigate
+      setTimeout(() => {
+        setShowLoginSuccess(false);
+        setCurrentPage('dashboard');
+      }, 1500);
+      
+    } catch (err) {
+      console.error('Login error:', err);
+      setError('Connection failed. Please check your internet connection.');
+      setLoading(false);
+    }
+  }, [staffId, surname]);
 
   const verifyMeal = useCallback(async () => {
     if (!session) {
@@ -356,14 +365,45 @@ const MealTicketSystem = () => {
           }
         }
         
+        @keyframes slideUp {
+          from {
+            transform: translateY(20px);
+            opacity: 0;
+          }
+          to {
+            transform: translateY(0);
+            opacity: 1;
+          }
+        }
+        
+        @keyframes checkmark {
+          0% {
+            transform: scale(0);
+          }
+          50% {
+            transform: scale(1.2);
+          }
+          100% {
+            transform: scale(1);
+          }
+        }
+        
         .page-transition {
           animation: subtleFade 0.15s ease-out;
+        }
+        
+        .success-overlay {
+          animation: slideUp 0.3s ease-out;
+        }
+        
+        .checkmark-animate {
+          animation: checkmark 0.4s ease-out;
         }
       `}</style>
 
       {currentPage === 'login' && (
         <div className="page-transition min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4 pb-20">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 relative">
             <div className="text-center mb-8">
               <div className="bg-indigo-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Users className="text-white" size={32} />
@@ -376,72 +416,90 @@ const MealTicketSystem = () => {
               </div>
             </div>
 
-       <form onSubmit={handleLogin} method="post" action="#" className="space-y-6">
-  <div>
-    <label htmlFor="staffId" className="block text-sm font-medium text-gray-700 mb-2">
-      Staff ID <span className="text-red-500">*</span>
-    </label>
-    <input
-      id="staffId"
-      type="text"
-      name="username"
-      autoComplete="username"
-      value={staffId}
-      onChange={(e) => setStaffId(e.target.value.toUpperCase())}
-      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none uppercase"
-      placeholder="ENTER STAFF ID"
-      required
-    />
-  </div>
+            <form onSubmit={handleLogin} method="post" action="#" className="space-y-6">
+              <div>
+                <label htmlFor="staffId" className="block text-sm font-medium text-gray-700 mb-2">
+                  Staff ID <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="staffId"
+                  type="text"
+                  name="username"
+                  autoComplete="username"
+                  value={staffId}
+                  onChange={(e) => setStaffId(e.target.value.toUpperCase())}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none uppercase"
+                  placeholder="ENTER STAFF ID"
+                  required
+                  disabled={showLoginSuccess}
+                />
+              </div>
 
-  <div>
-    <label htmlFor="surname" className="block text-sm font-medium text-gray-700 mb-2">
-      Surname <span className="text-red-500">*</span>
-    </label>
-    <div className="relative">
-      <input
-        id="surname"
-        type={showPassword ? "text" : "password"}
-        name="password"
-        autoComplete="current-password"
-        value={surname}
-        onChange={(e) => setSurname(e.target.value.toUpperCase())}
-        className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none uppercase"
-        placeholder="ENTER SURNAME"
-        required
-      />
-      <div
-        onTouchEnd={(e) => {
-          e.preventDefault();
-          setShowPassword(!showPassword);
-        }}
-        onClick={(e) => {
-          e.preventDefault();
-          setShowPassword(!showPassword);
-        }}
-        className="absolute right-0 top-0 h-full px-4 text-gray-500 active:text-gray-900 flex items-center justify-center cursor-pointer select-none"
-        style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
-      >
-        {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-      </div>
-    </div>
-  </div>
+              <div>
+                <label htmlFor="surname" className="block text-sm font-medium text-gray-700 mb-2">
+                  Surname <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    id="surname"
+                    type={showPassword ? "text" : "password"}
+                    name="password"
+                    autoComplete="current-password"
+                    value={surname}
+                    onChange={(e) => setSurname(e.target.value.toUpperCase())}
+                    className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none uppercase"
+                    placeholder="ENTER SURNAME"
+                    required
+                    disabled={showLoginSuccess}
+                  />
+                  <div
+                    onTouchEnd={(e) => {
+                      e.preventDefault();
+                      setShowPassword(!showPassword);
+                    }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setShowPassword(!showPassword);
+                    }}
+                    className="absolute right-0 top-0 h-full px-4 text-gray-500 active:text-gray-900 flex items-center justify-center cursor-pointer select-none"
+                    style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
+                  >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </div>
+                </div>
+              </div>
 
-  {error && (
-    <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg flex items-start gap-2">
-      <AlertCircle size={20} className="shrink-0 mt-0.5" />
-      <span className="text-sm">{error}</span>
-    </div>
-  )}
+              {error && (
+                <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg flex items-start gap-2">
+                  <AlertCircle size={20} className="shrink-0 mt-0.5" />
+                  <span className="text-sm">{error}</span>
+                </div>
+              )}
 
-  <button
-    type="submit"
-    disabled={loading}
-    className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-  >
-    {loading ? 'Authenticating...' : 'Login'}
-  </button>
-</form>
+              <button
+                type="submit"
+                disabled={loading || showLoginSuccess}
+                className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Authenticating...' : 'Login'}
+              </button>
+            </form>
+
+            {/* Success Overlay */}
+            {showLoginSuccess && (
+              <div className="absolute inset-0 bg-white rounded-2xl flex items-center justify-center z-10 success-overlay">
+                <div className="text-center px-8">
+                  <div className="bg-green-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 checkmark-animate">
+                    <Check className="text-green-600" size={40} />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-800 mb-2">Login Successful!</h3>
+                  <p className="text-gray-600">Welcome back, {session?.name}</p>
+                  <div className="mt-4">
+                    <div className="w-12 h-1 bg-indigo-600 rounded mx-auto animate-pulse"></div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
