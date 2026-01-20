@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -142,14 +141,11 @@ const MealTicketSystem = () => {
         price: data.staff.price || 0
       };
       
-      // SUCCESS! Set session and show success state
       setSession(sessionData);
       setMealUsedToday(false);
       setLoading(false);
       setShowLoginSuccess(true);
       
-      // Browser will now capture the password from the form that was just submitted
-      // Wait briefly then navigate to dashboard
       setTimeout(() => {
         setShowLoginSuccess(false);
         setCurrentPage('dashboard');
@@ -493,7 +489,6 @@ const MealTicketSystem = () => {
               </button>
             </form>
 
-            {/* Success Overlay */}
             {showLoginSuccess && (
               <div className="absolute inset-0 bg-white rounded-2xl flex items-center justify-center z-10 success-overlay">
                 <div className="text-center px-8">
@@ -516,32 +511,32 @@ const MealTicketSystem = () => {
         <div className="page-transition min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 p-4 pb-20">
           <div className="max-w-4xl mx-auto">
             <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
-              <div className="bg-indigo-600 text-white p-6">
+              <div className="bg-indigo-600 text-white p-4 sm:p-6">
                 <div className="flex justify-between items-start">
-                  <div>
-                    <h2 className="text-2xl font-bold mb-1">{session?.name}</h2>
-                    <p className="text-indigo-200">ID: {session?.id} • {session?.department}</p>
+                  <div className="flex-1 min-w-0 pr-2">
+                    <h2 className="text-lg sm:text-2xl font-bold mb-1 truncate">{session?.name}</h2>
+                    <p className="text-xs sm:text-sm text-indigo-200 truncate">ID: {session?.id} • {session?.department}</p>
                     <div className="flex items-center gap-1 mt-2 text-indigo-100">
-                      <MapPin size={16} />
-                      <span className="text-sm">{session?.location}</span>
+                      <MapPin size={14} className="sm:w-4 sm:h-4 shrink-0" />
+                      <span className="text-xs sm:text-sm truncate">{session?.location}</span>
                     </div>
                   </div>
                   <button
                     onClick={handleLogout}
                     disabled={loading}
-                    className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg text-sm transition disabled:opacity-50"
+                    className="bg-white/20 hover:bg-white/30 px-3 py-2 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm transition disabled:opacity-50 shrink-0"
                   >
                     Logout
                   </button>
                 </div>
               </div>
 
-              <div className="p-6 space-y-6">
-                <div className="bg-gray-50 rounded-xl p-4 flex items-center gap-3">
-                  <Calendar className="text-indigo-600" size={24} />
-                  <div>
-                    <p className="text-sm text-gray-600">Today&apos;s Date</p>
-                    <p className="font-semibold text-gray-800">
+              <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+                <div className="bg-gray-50 rounded-xl p-3 sm:p-4 flex items-center gap-2 sm:gap-3">
+                  <Calendar className="text-indigo-600 shrink-0" size={20} />
+                  <div className="min-w-0">
+                    <p className="text-xs sm:text-sm text-gray-600">Today&apos;s Date</p>
+                    <p className="font-semibold text-sm sm:text-base text-gray-800 truncate">
                       {new Date().toLocaleDateString('en-US', { 
                         weekday: 'long', 
                         year: 'numeric', 
@@ -552,28 +547,28 @@ const MealTicketSystem = () => {
                   </div>
                 </div>
 
-                <div className="bg-indigo-50 rounded-xl p-4 flex items-center gap-3 border border-indigo-200">
-                  <div className="bg-indigo-600 text-white w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg">
+                <div className="bg-indigo-50 rounded-xl p-3 sm:p-4 flex items-center gap-2 sm:gap-3 border border-indigo-200">
+                  <div className="bg-indigo-600 text-white w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center font-bold text-base sm:text-lg shrink-0">
                     ₦
                   </div>
-                  <div>
-                    <p className="text-sm text-indigo-600 font-medium">Your Meal Price</p>
-                    <p className="font-bold text-2xl text-indigo-900">₦{session?.price?.toLocaleString() || 0}</p>
+                  <div className="min-w-0">
+                    <p className="text-xs sm:text-sm text-indigo-600 font-medium">Your Meal Price</p>
+                    <p className="font-bold text-xl sm:text-2xl text-indigo-900">₦{session?.price?.toLocaleString() || 0}</p>
                   </div>
                 </div>
 
-                <div className={`rounded-xl p-6 ${mealUsedToday ? 'bg-green-50' : 'bg-amber-50'}`}>
-                  <div className="flex items-center gap-3 mb-4">
+                <div className={`rounded-xl p-4 sm:p-6 ${mealUsedToday ? 'bg-green-50' : 'bg-amber-50'}`}>
+                  <div className="flex items-start sm:items-center gap-2 sm:gap-3 mb-4">
                     {mealUsedToday ? (
-                      <Check className="text-green-600" size={32} />
+                      <Check className="text-green-600 shrink-0 mt-1 sm:mt-0" size={24} />
                     ) : (
-                      <Clock className="text-amber-600" size={32} />
+                      <Clock className="text-amber-600 shrink-0 mt-1 sm:mt-0" size={24} />
                     )}
-                    <div>
-                      <h3 className="text-xl font-bold text-gray-800">
+                    <div className="min-w-0">
+                      <h3 className="text-base sm:text-xl font-bold text-gray-800">
                         {mealUsedToday ? 'Meal Ticket Used' : 'Meal Ticket Available'}
                       </h3>
-                      <p className={`text-sm ${mealUsedToday ? 'text-green-700' : 'text-amber-700'}`}>
+                      <p className={`text-xs sm:text-sm ${mealUsedToday ? 'text-green-700' : 'text-amber-700'}`}>
                         {mealUsedToday 
                           ? 'You have already used your meal ticket today' 
                           : 'Scan the QR code at the canteen to use your meal ticket'}
@@ -582,15 +577,15 @@ const MealTicketSystem = () => {
                   </div>
 
                   {!mealUsedToday && (
-                    <div className="mt-6 space-y-4">
+                    <div className="mt-4 sm:mt-6 space-y-3 sm:space-y-4">
                       {!showQRScanner ? (
                         <button
                           onClick={startQRScanner}
                           disabled={!jsQRLoaded || loading}
-                          className="w-full bg-green-600 text-white py-4 rounded-lg font-semibold hover:bg-green-700 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="w-full bg-green-600 text-white py-3 sm:py-4 rounded-lg text-sm sm:text-base font-semibold hover:bg-green-700 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          <QrCode size={24} />
-                          {loading ? 'Processing...' : jsQRLoaded ? 'Open Camera to Scan QR Code' : 'Loading Scanner...'}
+                          <QrCode size={20} className="sm:w-6 sm:h-6" />
+                          <span className="truncate">{loading ? 'Processing...' : jsQRLoaded ? 'Open Camera to Scan QR Code' : 'Loading Scanner...'}</span>
                         </button>
                       ) : (
                         <div className="bg-black rounded-lg overflow-hidden">
@@ -652,36 +647,36 @@ const MealTicketSystem = () => {
 
       {currentPage === 'success' && (
         <div className="page-transition min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4 pb-20">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 sm:p-8">
             <div className="text-center">
-              <div className="bg-green-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Check className="text-green-600" size={40} />
+              <div className="bg-green-100 w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Check className="text-green-600" size={32} />
               </div>
-              <h2 className="text-3xl font-bold text-gray-800 mb-2">Meal Ticket Used!</h2>
-              <p className="text-gray-600 mb-2">Successfully marked for {session?.name}</p>
-              <p className="text-sm text-gray-500 mb-2">Date: {new Date().toLocaleDateString()}</p>
-              <p className="text-sm text-gray-500 mb-2">Time: {new Date().toLocaleTimeString()}</p>
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">Meal Ticket Used!</h2>
+              <p className="text-sm sm:text-base text-gray-600 mb-2">Successfully marked for {session?.name}</p>
+              <p className="text-xs sm:text-sm text-gray-500 mb-1 sm:mb-2">Date: {new Date().toLocaleDateString()}</p>
+              <p className="text-xs sm:text-sm text-gray-500 mb-2 sm:mb-3">Time: {new Date().toLocaleTimeString()}</p>
               
-              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-3 flex items-center gap-2 justify-center">
-                <MapPin size={16} className="text-purple-600" />
-                <span className="text-purple-700 font-medium text-sm">{session?.location}</span>
-              </div>
-              
-              <div className="bg-indigo-100 border-2 border-indigo-300 rounded-lg p-3 mb-6">
-                <p className="text-indigo-700 text-sm font-medium mb-1">Ticket Price</p>
-                <p className="text-indigo-900 text-3xl font-bold">₦{session?.price?.toLocaleString() || 0}</p>
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-2 sm:p-3 mb-2 sm:mb-3 flex items-center gap-2 justify-center">
+                <MapPin size={14} className="text-purple-600 shrink-0 sm:w-4 sm:h-4" />
+                <span className="text-purple-700 font-medium text-xs sm:text-sm truncate">{session?.location}</span>
               </div>
               
-              <div className="bg-green-50 border-l-4 border-green-500 p-4 mb-6">
-                <p className="text-sm text-green-700 font-semibold">✓ STATUS: USED</p>
+              <div className="bg-indigo-100 border-2 border-indigo-300 rounded-lg p-3 mb-4 sm:mb-6">
+                <p className="text-indigo-700 text-xs sm:text-sm font-medium mb-1">Ticket Price</p>
+                <p className="text-indigo-900 text-2xl sm:text-3xl font-bold">₦{session?.price?.toLocaleString() || 0}</p>
+              </div>
+              
+              <div className="bg-green-50 border-l-4 border-green-500 p-3 sm:p-4 mb-4 sm:mb-6">
+                <p className="text-xs sm:text-sm text-green-700 font-semibold">✓ STATUS: USED</p>
                 <p className="text-xs text-green-600 mt-1">Your meal ticket has been successfully used for today.</p>
-                <p className="text-xs text-green-600">You may use your next ticket starting tomorrow at 7:00 AM.</p>
+                <p className="text-xs text-green-600 mt-0.5">You may use your next ticket starting tomorrow at 7:00 AM.</p>
               </div>
               
               <button
                 onClick={handleLogout}
                 disabled={loading}
-                className="bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 transition w-full disabled:opacity-50"
+                className="bg-indigo-600 text-white px-6 py-3 sm:py-3.5 rounded-lg text-sm sm:text-base font-semibold hover:bg-indigo-700 transition w-full disabled:opacity-50"
               >
                 {loading ? 'Logging out...' : 'Logout'}
               </button>
@@ -689,6 +684,7 @@ const MealTicketSystem = () => {
           </div>
         </div>
       )}
+
 
       {currentPage === 'alreadyUsed' && (
         <div className="page-transition min-h-screen bg-linear-to-br from-red-50 to-orange-100 flex items-center justify-center p-4 pb-20">
