@@ -69,6 +69,7 @@ const MealTicketSystem = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const detectIntervalRef = useRef<number | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const hiddenFormRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     const script = document.createElement('script');
@@ -140,12 +141,16 @@ const MealTicketSystem = () => {
         price: data.staff.price || 0
       };
       
+      // SUCCESS! Now trigger browser password save
       setSession(sessionData);
       setMealUsedToday(false);
       setLoading(false);
-      
-      // Show success overlay while keeping form mounted
       setShowLoginSuccess(true);
+      
+      // Submit the hidden form to trigger password manager
+      if (hiddenFormRef.current) {
+        hiddenFormRef.current.submit();
+      }
       
       // Wait for browser to offer password save, then navigate
       setTimeout(() => {
@@ -400,6 +405,21 @@ const MealTicketSystem = () => {
           animation: checkmark 0.4s ease-out;
         }
       `}</style>
+
+      {/* Hidden iframe for password manager trick */}
+      <iframe name="hidden_iframe" style={{ display: 'none' }}></iframe>
+      
+      {/* Hidden form that submits to iframe */}
+      <form
+        ref={hiddenFormRef}
+        method="post"
+        action="about:blank"
+        target="hidden_iframe"
+        style={{ display: 'none' }}
+      >
+        <input type="text" name="username" value={staffId} readOnly />
+        <input type="password" name="password" value={surname} readOnly />
+      </form>
 
       {currentPage === 'login' && (
         <div className="page-transition min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4 pb-20">
