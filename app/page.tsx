@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Check, X, Clock, Users, Calendar, QrCode, AlertCircle, MapPin } from 'lucide-react';
+import { Check, X, Clock, Users, Calendar, QrCode, AlertCircle, MapPin, Eye, EyeOff } from 'lucide-react';
 
 interface SessionData {
   id: string;
@@ -55,6 +55,7 @@ const MealTicketSystem = () => {
   const [session, setSession] = useState<SessionData | null>(null);
   const [staffId, setStaffId] = useState<string>('');
   const [surname, setSurname] = useState<string>('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string>('');
   const [mealUsedToday, setMealUsedToday] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
@@ -87,8 +88,7 @@ const MealTicketSystem = () => {
     };
   }, []);
 
-  const handleLogin = useCallback(async (e: React.FormEvent<HTMLFormElement> | React.MouseEvent<HTMLButtonElement> | React.KeyboardEvent<HTMLInputElement>) => {
-    e.preventDefault();
+  const handleLogin = useCallback(async () => {
     setError('');
     setLoading(true);
 
@@ -334,6 +334,12 @@ const MealTicketSystem = () => {
     setCurrentPage('login');
   };
 
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleLogin();
+    }
+  };
+
   useEffect(() => {
     return () => {
       if (detectIntervalRef.current) clearInterval(detectIntervalRef.current);
@@ -381,9 +387,11 @@ const MealTicketSystem = () => {
                 </label>
                 <input
                   type="text"
+                  name="username"
+                  autoComplete="username"
                   value={staffId}
                   onChange={(e) => setStaffId(e.target.value.toUpperCase())}
-                  onKeyDown={(e) => e.key === 'Enter' && handleLogin(e)}
+                  onKeyPress={handleKeyPress}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none uppercase"
                   placeholder="ENTER STAFF ID"
                   required
@@ -391,19 +399,31 @@ const MealTicketSystem = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Surname <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={surname}
-                  onChange={(e) => setSurname(e.target.value.toUpperCase())}
-                  onKeyDown={(e) => e.key === 'Enter' && handleLogin(e)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none uppercase"
-                  placeholder="ENTER SURNAME"
-                  required
-                />
-              </div>
+  <label className="block text-sm font-medium text-gray-700 mb-2">
+    Surname <span className="text-red-500">*</span>
+  </label>
+  <div className="relative">
+    <input
+      type={showPassword ? "text" : "password"}
+      name="password"
+      autoComplete="current-password"
+      value={surname}
+      onChange={(e) => setSurname(e.target.value.toUpperCase())}
+      onKeyPress={handleKeyPress}
+      className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none uppercase"
+      placeholder="ENTER SURNAME"
+      required
+    />
+    <button
+      type="button"
+      onClick={() => setShowPassword(!showPassword)}
+      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+      aria-label={showPassword ? "Hide password" : "Show password"}
+    >
+      {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+    </button>
+  </div>
+</div>
 
               {error && (
                 <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg flex items-start gap-2">
